@@ -22,6 +22,8 @@ let gvcounter = 0;
 let stepcounter = 0;
 
 const memoization = false;
+const bdd_to_svg = false;
+const bdd_to_png = false;
 
 const d    = require('debug')('tml');
 const dp   = require('debug')('tml:parser');
@@ -68,7 +70,8 @@ class node {
 		this.v = varid;
 		this.hi = hi;
     this.lo = lo;
-	}
+  }
+  clone() { return new node(this.v, this.hi, this.lo); }
 	get key() { return `${this.v}:${this.hi}/${this.lo}`; }
   // get hash() { return this.v + this.hi + this.lo; } // question bellow
 }
@@ -397,25 +400,37 @@ class bdds extends bdds_base {
     }
     let r;
     do {
-      const Vx = src.getnode(x);
-      if (bdds.leaf(Vx)) { r = bdds.trueleaf(Vx) ? y : bdds.F; break; }
-      const Vy = dst.getnode(y);
-      if (bdds.leaf(Vy)) {
-        r = !bdds.trueleaf(Vy)
-          ? bdds.F
-          : (src === dst ? x : dst.copy(src, x)); break; }
-      let v;
-      let Vx1 = Vx.hi; let Vx0 = Vx.lo;
-      let Vy1 = Vy.hi; let Vy0 = Vy.lo;
-      if ((!Vx.v && Vy.v) || (Vy.v && (Vx.v > Vy.v))) {
-        Vx1 = Vx0 = x; v = Vy.v;
-      } else if (!Vx.v) {
-        r = (Vx1&&Vy1) ? bdds.T : bdds.F; break;
-      } else if ((v = Vx.v) < Vy.v || !Vy.v)
-        Vy1 = Vy0 = y;
-      r = dst.add(new node(v,
-        bdds.apply_and(src, Vx1, dst, Vy1),
-        bdds.apply_and(src, Vx0, dst, Vy0)))  
+      const Vx = src.getnode(x).clone();      // clone node x
+      if (bdds.leaf(Vx)) {                    // if it's leaf
+        r = bdds.trueleaf(Vx)                 //   if it's trueleaf then
+          ? y                                 //     return y
+          : bdds.F;                           //   else return F
+          break;
+      }
+      const Vy = dst.getnode(y).clone();      // clone node y
+      if (bdds.leaf(Vy)) {                    // if it's leaf then
+        r = bdds.trueleaf(Vy)                 //  if it's trueleaf then
+          ? (src === dst                      //    if applied on self
+            ? x                               //      then return x
+            : dst.copy(src, x))               //      else return x copied to dst
+          : bdds.F;                           //  else return false
+          break;
+      }
+      let v;                                  // resulting var id
+      if (Vx.v > Vy.v) {                      // if x.v > y.v then
+        Vx.hi = x;                            //   link x.hi to self
+        Vx.lo = x;                            //   link x.lo to self
+        v = Vy.v;                             //   set resulting varid to y.v
+      } else {                                // else
+        v = Vx.v                              //   set resulting varid to x.v
+        if (v < Vy.v) {                       //   if v < y.v then
+          Vy.hi = y;                          //     link y.hi to self
+          Vy.lo = y;                          //     link y.lo to self
+        }
+      }
+      r = dst.add(new node(v,                 // add new node with
+        bdds.apply_and(src, Vx.hi, dst, Vy.hi),   // recursive call on highs
+        bdds.apply_and(src, Vx.lo, dst, Vy.lo)))  // recursive call on lows
     } while (0);
     if (memoization) src.memo_and[t] = r;
     return r;
@@ -431,26 +446,42 @@ class bdds extends bdds_base {
     }
     let r;
     do {
-      const Vx = src.getnode(x);
+      const Vx = src.getnode(x).clone();
       if (bdds.leaf(Vx) && !bdds.trueleaf(Vx)) {
-        r = bdds.F; break; }
-      const Vy = dst.getnode(y);
+        r = bdds.F;
+        break;
+      }
+      const Vy = dst.getnode(y).clone();
       if (bdds.leaf(Vy)) {
         r = bdds.trueleaf(Vy)
           ? bdds.F
-          : (src === dst ? x : dst.copy(src, x)); break; }
+          : (src === dst
+            ? x
+            : dst.copy(src, x));
+        break;
+      }
       let v;
-      let Vx1 = Vx.hi; let Vx0 = Vx.lo;
-      let Vy1 = Vy.hi; let Vy0 = Vy.lo;
-      if ((!Vx.v && Vy.v) || (Vy.v && (Vx.v > Vy.v))) {
-        Vx1 = Vx0 = x; v = Vy.v;
-      } else if (!Vx.v) {
-        r = (Vx1 && !Vy1) ? bdds.T : bdds.F; break;
-      } else if ((v = Vx.v) < Vy.v || !Vy.v)
-        Vy1 = Vy0 = y;
+      if ((Vx.v === 0) || (Vx.v > Vy.v)) {
+        Vx.hi = x;
+        Vx.lo = x;
+        v = Vy.v;
+      } else {
+        if (Vx.v === 0) {
+          r = ((Vx.hi > 0) && (Vy.hi === 0))
+            ? bdds.T
+            : bdds.F;
+          break;
+        } else {
+          v = Vx.v;
+          if (v < Vy.v) {
+            Vy.hi = y;
+            Vy.lo = y;
+          }
+        }
+      }
       r = dst.add(new node(v,
-        bdds.apply_and_not(src, Vx1, dst, Vy1),
-        bdds.apply_and_not(src, Vx0, dst, Vy0)));
+        bdds.apply_and_not(src, Vx.hi, dst, Vy.hi),
+        bdds.apply_and_not(src, Vx.lo, dst, Vy.lo)));
     } while (0);
 		if (memoization) src.memo_and_not[t] = r;
 		return r;
@@ -466,25 +497,37 @@ class bdds extends bdds_base {
     }
     let r;
     do {
-      const Vx = src.getnode(x);
-      if (bdds.leaf(Vx)) { r = bdds.trueleaf(Vx) ? bdds.T : y; break; }
-      const Vy = dst.getnode(y);
+      const Vx = src.getnode(x).clone();
+      if (bdds.leaf(Vx)) {
+        r = bdds.trueleaf(Vx)
+          ? bdds.T
+          : y;
+        break;
+      }
+      const Vy = dst.getnode(y).clone();
       if (bdds.leaf(Vy)) {
         r = bdds.trueleaf(Vy)
           ? bdds.T
-          : (src === dst ? x : dst.copy(src, x)); break; }
+          : (src === dst
+            ? x
+            : dst.copy(src, x));
+        break;
+      }
       let v;
-      let Vx1 = Vx.hi; let Vx0 = Vx.lo;
-      let Vy1 = Vy.hi; let Vy0 = Vy.lo;
-      if ((!Vx.v && Vy.v) || (Vy.v && (Vx.v > Vy.v))) {
-        Vx1 = Vx0 = x; v = Vy.v;
-      } else if (!Vx.v) {
-        r = (Vx1||Vy1) ? bdds.T : bdds.F; break;
-      } else if ((v = Vx.v) < Vy.v || !Vy.v)
-        Vy1 = Vy0 = y;
+      if (Vx.v > Vy.v) {
+        Vx.hi = x;
+        Vx.lo = x;
+        v = Vy.v;
+      } else {
+        v = Vx.v;
+        if ((v < Vy.v)) {
+          Vy.hi = y;
+          Vy.lo = y;
+        }
+      }
       r = dst.add(new node(v,
-        bdds.apply_or(src, Vx1, dst, Vy1),
-        bdds.apply_or(src, Vx0, dst, Vy0)))  
+        bdds.apply_or(src, Vx.hi, dst, Vy.hi),
+        bdds.apply_or(src, Vx.lo, dst, Vy.lo)))
     } while (0);
 		if (memoization) src.memo_or[t] = r;
 		return r;
@@ -502,52 +545,52 @@ class bdds extends bdds_base {
     }
     let r;
     do {
-      dpfp('getnode x', x, src.dim, dst.dim);
-      const Vx = src.getnode(x);
-      const Vy = dst.getnode(y);
-      let v;
-      let Vx1 = Vx.hi; let Vx0 = Vx.lo;
-      let Vy1 = Vy.hi; let Vy0 = Vy.lo;
-      dpfp('Vx', Vx.key, 'Vy', Vy.key);
+      // dpfp('getnode x', x, src.dim, dst.dim);
+      const Vx = src.getnode(x).clone();
+      // dpfp('Vx', Vx.key, 'Vy', Vy.key);
       if (bdds.leaf(Vx)) {
-        dpfp('leaf Vx true');
-        r = bdds.trueleaf(Vx) ? bdds.apply(dst, y, dst, new op_exists(s, sz)) : bdds.F;
+        // dpfp('leaf Vx true');
+        r = bdds.trueleaf(Vx)
+          ? bdds.apply(dst, y, dst, new op_exists(s, sz))
+          : bdds.F;
         break;
       }
+      const Vy = dst.getnode(y).clone();
       if (bdds.leaf(Vy)) {
-        dpfp('leaf Vy true');
-        r = !bdds.trueleaf(Vy)
-          ? bdds.F
-          : (src === dst
+        // dpfp('leaf Vy true');
+        r = bdds.trueleaf(Vy)
+          ? (src === dst
             ? bdds.apply(dst, x, dst, new op_exists(s, sz))
-            : bdds.apply(dst, dst.copy(src, x), dst, new op_exists(s, sz)));
+            : bdds.apply(dst, dst.copy(src, x), dst, new op_exists(s, sz)))
+          : bdds.F;
         break;
       }
-      dpfp(Vx.v==0);
-      if (((Vx.v==0) && Vy.v>0) || (Vy.v>0 && (Vx.v > Vy.v))) {
-        Vx1 = Vx0 = x; v = Vy.v; dpfp(Vx1, Vx0, x, v, Vy.v);
-      } else if (Vx.v==0) {
-        dpfp('if Vx.v==0 true')
-        r = (Vx1&&Vy1) ? bdds.T : bdds.F;
-        break;
+      // dpfp(Vx.v === 0);
+      let v;
+      if (Vx.v > Vy.v) {
+        Vx.hi = x;
+        Vx.lo = x;
+        v = Vy.v;
+        // dpfp(Vx.hi, Vx.lo, x, v, Vy.v);
       } else {
-        dpfp('if Vx.v==0 false');
         v = Vx.v;
-        if ((v < Vy.v) || (Vy.v == 0)) {
-          Vy1 = Vy0 = y; dpfp(Vy1, Vy0, y); }
+        if ((v < Vy.v)) {
+          Vy.hi = y;
+          Vy.lo = y;
+        }
       }
-      dpfp("v:",v);
+      // dpfp("v:",v);
       if ((v <= sz) && s[v-1]) {
-        dpfp("bdd_or apply_and_ex_perm", Vx1, Vy1, Vx0, Vy0, sz);
+        // dpfp("bdd_or apply_and_ex_perm", Vx.hi, Vy.hi, Vx.lo, Vy.lo, sz);
         r = dst.bdd_or(
-          bdds.apply_and_ex_perm(src, Vx1, dst, Vy1, s, p, sz),
-          bdds.apply_and_ex_perm(src, Vx0, dst, Vy0, s, p, sz));
+          bdds.apply_and_ex_perm(src, Vx.hi, dst, Vy.hi, s, p, sz),
+          bdds.apply_and_ex_perm(src, Vx.lo, dst, Vy.lo, s, p, sz));
         break;
       }
-      dpfp("add", Vx1, Vy1, sz);
+      // dpfp("add", Vx.hi, Vy.hi, sz);
       r = dst.add(new node(v,
-        bdds.apply_and_ex_perm(src, Vx1, dst, Vy1, s, p, sz),
-        bdds.apply_and_ex_perm(src, Vx0, dst, Vy0, s, p, sz)));
+        bdds.apply_and_ex_perm(src, Vx.hi, dst, Vy.hi, s, p, sz),
+        bdds.apply_and_ex_perm(src, Vx.lo, dst, Vy.lo, s, p, sz)));
     } while (0);
 		if (memoization) src.memo_and_ex[t] = r;
 		return r;
@@ -555,51 +598,51 @@ class bdds extends bdds_base {
   
 	static apply(b, root, r, op) {
     const get = id => op.op(b, b.getnode(id)); // evaluates the operator
-    const parents = []; // path from root to the current node
+    const parents = [];                   // path from root to the current node
     const s = _enum({ "LO": 1, "HI": 2, "OP": 3 }); // traversing states
-    let ts = s.LO; // current traversing state
-    let n = get(root); // current node
-    let nn = 0; // new node
-    let high = 0; // last high leaf
-    let low = 0; // last low leaf
-    do { // traversing the binary tree
-      if (ts === s.LO) { // search low
-        da('apply LO n', n.key, n.lo);
+    let ts = s.LO;                        // current traversing state
+    let n = get(root);                    // current node
+    let nn = 0;                           // new node
+    let high = 0;                         // last high leaf
+    let low = 0;                          // last low leaf
+    do {                                  // traversing the binary tree
+      if (ts === s.LO) {                  // search low
+        // da('apply LO n', n.key, n.lo);
         if(bdds.leaf(n.lo)) {
-          da('apply LO leaf', n.key, 'go HI');
-          low = n.lo; // remember last low leaf
-          ts = s.HI; // leaf, go search high
-        } else { // not a leaf
-          da('apply LO not leaf', n.key, 'go LO id:', n.lo);
-          parents.push(n); // store parent
-          n = get(n.lo); // go low (and search low)
+          // da('apply LO leaf', n.key, 'go HI');
+          low = n.lo;                     // remember last low leaf
+          ts = s.HI;                      // leaf, go search high
+        } else {                          // not a leaf
+          // da('apply LO not leaf', n.key, 'go LO id:', n.lo);
+          parents.push(n);                // store parent
+          n = get(n.lo);                  // go low (and search low)
         }
-      } else if (ts === s.HI) { // search high
-        da('apply HI n', n.key, n.hi);
+      } else if (ts === s.HI) {           // search high
+        // da('apply HI n', n.key, n.hi);
         if (bdds.leaf(n.hi)) {
-          da('apply HI leaf', n.key);
-          high = n.hi; // remember last high leaf
-          ts = s.OP; // leaf, do op
-        } else { // not a leaf
-          da('apply HI not leaf', n.key, 'go HI id:', n.hi);
-          parents.push(n); // store parent
-          n = get(n.hi); // go high
-          ts = s.LO; // and search low
+          // da('apply HI leaf', n.key);
+          high = n.hi;                    // remember last high leaf
+          ts = s.OP;                      // leaf, do op
+        } else {                          // not a leaf
+          // da('apply HI not leaf', n.key, 'go HI id:', n.hi);
+          parents.push(n);                // store parent
+          n = get(n.hi);                  // go high
+          ts = s.LO;                      // and search low
         }
-      } else if (ts === s.OP) { // do op and go UP
-        da('apply OP', n.key, 'high:', high, 'low:', low);
+      } else if (ts === s.OP) {           // do op and go UP
+        // da('apply OP', n.key, 'high:', high, 'low:', low);
         nn = r.add(new node(n.v, high, low));
-        da('applied child', nn, n.lo, n.key, root, parents);
-        if (parents.length === 0) break; // we are back at the top -> break inf. loop
-        n = parents.pop(); // go up
-        if (nn === n.lo) { // if we operated on low
-          low = nn; ts = s.HI; // set new low and go high
-        } else {  // else we operated on high already
-          high = nn; ts = s.OP; // set new high and go op
+        // da('applied child', nn, n.lo, n.key, root, parents);
+        if (parents.length === 0) break;  // we are back at the top -> break inf. loop
+        n = parents.pop();                // go up
+        if (nn === n.lo) {                // if we operated on low
+          low = nn; ts = s.HI;            // set new low and go high
+        } else {                          // else we operated on high already
+          high = nn; ts = s.OP;           // set new high and go op
         }
       }
     } while (true);
-    da('apply returning', nn, 'n:', n.key, 'nn:', nn);
+    // da('apply returning', nn, 'n:', n.key, 'nn:', nn);
     return nn; // return the last new node
 	}
 	// [overlapping] rename
@@ -871,8 +914,8 @@ function string_read_text(data) {
 function bdd_out(b, db, dict) {
   const dot = bdd_to_dot(b, db, dict);
   // dbd(dot);
-  graphviz(dot, 'svg');
-  graphviz(dot, 'png');
+  if (bdd_to_svg) graphviz(dot, 'svg');
+  if (bdd_to_png) graphviz(dot, 'png');
   return;
   dbd(b.M);
   const nodes = b.V;
