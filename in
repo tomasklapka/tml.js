@@ -1,0 +1,2 @@
+#father Tom Amy. parent ?X ?Y :- father ?X ?Y.
+e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.
