@@ -36,11 +36,14 @@ const da   = require('debug')('tml:apply');
 const sep_expected = `Term or ':-' or '.' expected`;
 const term_expected = 'Term expected';
 
-
 const _enum = obj => Object.freeze(obj);
 const skip_ws = s => { s.s = s.s.replace(/^\s+/, ''); };
 const skip = (s, n = 1) => { s.s = s.s.slice(n); }
 const er = x => { console.log(x); process.exit(0); }
+
+const op_and      = (x, y) => (x && y)  ? bdds.T : bdds.F;
+const op_and_not  = (x, y) => (x && !y) ? bdds.T : bdds.F;
+const op_or       = (x, y) => (x || y)  ? bdds.T : bdds.F;
 
 class dict { // represent strings as unique integers
 	static get pad() { return 0; }
@@ -384,153 +387,51 @@ class bdds extends bdds_base {
     }
 		const n = b.getnode(x);
     dbd('copy node', n.key);
-		const res = this.add(new node(n.v, this.copy(b, n.hi), this.copy(b, n.lo)));
+    const res = this.add(new node(n.v,
+      this.copy(b, n.hi),
+      this.copy(b, n.lo)));
     dbd('copy added', res.key);
     if (memoization) this.memo_copy[t] = res;
 		return res;
   }
   
-	static apply_and(src, x, dst, y) {
-		// da('apply_and x', x, 'y', y);
-    let t;
-    if (memoization) {
-      t = dst.id+'.'+x+'.'+y;
-      if (src.memo_and.hasOwnProperty(t))
-        return src.memo_and[t];
+  static apply(src, x, dst, y, op) {
+    d('apply', x, y, op);
+    if (op === undefined) {
+      op = y;
+      return this.apply_unary(src, x, dst, op);
     }
-    let r;
-    do {
-      const Vx = src.getnode(x).clone();      // clone node x
-      if (bdds.leaf(Vx)) {                    // if it's leaf
-        r = bdds.trueleaf(Vx)                 //   if it's trueleaf then
-          ? y                                 //     return y
-          : bdds.F;                           //   else return F
-          break;
+    const Vx = src.getnode(x).clone();
+    const Vy = dst.getnode(y).clone();
+    let v;
+    if (((Vx.v === 0) && (Vy.v > 0)) || ((Vy.v > 0) && (Vx.v > Vy.v))) {
+      v = Vy.v;
+      Vx.hi = x;
+      Vx.lo = x;
+    } else if (Vx.v === 0) {
+      return op(Vx.hi, Vy.hi);
+    } else {
+      v = Vx.v
+      if ((v < Vy.v) || (Vy.v === 0)) {
+        Vy.hi = y;
+        Vy.lo = y;
       }
-      const Vy = dst.getnode(y).clone();      // clone node y
-      if (bdds.leaf(Vy)) {                    // if it's leaf then
-        r = bdds.trueleaf(Vy)                 //  if it's trueleaf then
-          ? (src === dst                      //    if applied on self
-            ? x                               //      then return x
-            : dst.copy(src, x))               //      else return x copied to dst
-          : bdds.F;                           //  else return false
-          break;
-      }
-      let v;                                  // resulting var id
-      if (Vx.v > Vy.v) {                      // if x.v > y.v then
-        Vx.hi = x;                            //   link x.hi to self
-        Vx.lo = x;                            //   link x.lo to self
-        v = Vy.v;                             //   set resulting varid to y.v
-      } else {                                // else
-        v = Vx.v                              //   set resulting varid to x.v
-        if (v < Vy.v) {                       //   if v < y.v then
-          Vy.hi = y;                          //     link y.hi to self
-          Vy.lo = y;                          //     link y.lo to self
-        }
-      }
-      r = dst.add(new node(v,                 // add new node with
-        bdds.apply_and(src, Vx.hi, dst, Vy.hi),   // recursive call on highs
-        bdds.apply_and(src, Vx.lo, dst, Vy.lo)))  // recursive call on lows
-    } while (0);
-    if (memoization) src.memo_and[t] = r;
-    return r;
+    }
+    return dst.add(new node(v,
+      this.apply(src, Vx.hi, dst, Vy.hi, op),
+      this.apply(src, Vx.lo, dst, Vy.lo, op)));
+  }
+
+	static apply_and(src, x, dst, y) {
+    return bdds.apply(src, x, dst, y, op_and);
   }
   
 	static apply_and_not(src, x, dst, y) {
-		// da('apply_and_not x', x, 'y', y);
-    let t;
-    if (memoization) {
-      t = `${src.id}.${x}.${y}`;;
-      if (src.memo_and_not.hasOwnProperty(t))
-			  return src.memo_and_not[t];
-    }
-    let r;
-    do {
-      const Vx = src.getnode(x).clone();
-      if (bdds.leaf(Vx) && !bdds.trueleaf(Vx)) {
-        r = bdds.F;
-        break;
-      }
-      const Vy = dst.getnode(y).clone();
-      if (bdds.leaf(Vy)) {
-        r = bdds.trueleaf(Vy)
-          ? bdds.F
-          : (src === dst
-            ? x
-            : dst.copy(src, x));
-        break;
-      }
-      let v;
-      if ((Vx.v === 0) || (Vx.v > Vy.v)) {
-        Vx.hi = x;
-        Vx.lo = x;
-        v = Vy.v;
-      } else {
-        if (Vx.v === 0) {
-          r = ((Vx.hi > 0) && (Vy.hi === 0))
-            ? bdds.T
-            : bdds.F;
-          break;
-        } else {
-          v = Vx.v;
-          if (v < Vy.v) {
-            Vy.hi = y;
-            Vy.lo = y;
-          }
-        }
-      }
-      r = dst.add(new node(v,
-        bdds.apply_and_not(src, Vx.hi, dst, Vy.hi),
-        bdds.apply_and_not(src, Vx.lo, dst, Vy.lo)));
-    } while (0);
-		if (memoization) src.memo_and_not[t] = r;
-		return r;
+    return bdds.apply(src, x, dst, y, op_and_not);
   }
   
 	static apply_or(src, x, dst, y) {
-    // da('apply_or x', x, 'y', y);
-    let t;
-    if (memoization) {
-      t = `${dst.id}.${x}.${y}`;
-      if (src.memo_or.hasOwnProperty(t))
-        return src.memo_or[t];
-    }
-    let r;
-    do {
-      const Vx = src.getnode(x).clone();
-      if (bdds.leaf(Vx)) {
-        r = bdds.trueleaf(Vx)
-          ? bdds.T
-          : y;
-        break;
-      }
-      const Vy = dst.getnode(y).clone();
-      if (bdds.leaf(Vy)) {
-        r = bdds.trueleaf(Vy)
-          ? bdds.T
-          : (src === dst
-            ? x
-            : dst.copy(src, x));
-        break;
-      }
-      let v;
-      if (Vx.v > Vy.v) {
-        Vx.hi = x;
-        Vx.lo = x;
-        v = Vy.v;
-      } else {
-        v = Vx.v;
-        if ((v < Vy.v)) {
-          Vy.hi = y;
-          Vy.lo = y;
-        }
-      }
-      r = dst.add(new node(v,
-        bdds.apply_or(src, Vx.hi, dst, Vy.hi),
-        bdds.apply_or(src, Vx.lo, dst, Vy.lo)))
-    } while (0);
-		if (memoization) src.memo_or[t] = r;
-		return r;
+    return bdds.apply(src, x, dst, y, op_or);
   }
   
 	static apply_and_ex_perm(src, x, dst, y, s, p, sz) {
@@ -596,12 +497,12 @@ class bdds extends bdds_base {
 		return r;
   }
   
-	static apply(b, root, r, op) {
+	static apply_unary(b, x, r, op) {
     const get = id => op.op(b, b.getnode(id)); // evaluates the operator
     const parents = [];                   // path from root to the current node
     const s = _enum({ "LO": 1, "HI": 2, "OP": 3 }); // traversing states
     let ts = s.LO;                        // current traversing state
-    let n = get(root);                    // current node
+    let n = get(x);                    // current node
     let nn = 0;                           // new node
     let high = 0;                         // last high leaf
     let low = 0;                          // last low leaf
@@ -632,7 +533,7 @@ class bdds extends bdds_base {
       } else if (ts === s.OP) {           // do op and go UP
         // da('apply OP', n.key, 'high:', high, 'low:', low);
         nn = r.add(new node(n.v, high, low));
-        // da('applied child', nn, n.lo, n.key, root, parents);
+        // da('applied child', nn, n.lo, n.key, x, parents);
         if (parents.length === 0) break;  // we are back at the top -> break inf. loop
         n = parents.pop();                // go up
         if (nn === n.lo) {                // if we operated on low
