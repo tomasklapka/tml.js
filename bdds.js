@@ -13,15 +13,13 @@
 
 // This is a Javascript rewrite of TML by Tomáš Klapka <tomas@klapka.cz>
 
-const dbg_bdd   = require('debug')('tml:bdd');
-const dbg_node  = require('debug')('tml:bdd:node');
-const dbg_leaf  = require('debug')('tml:bdd:leaf');
-const dbg_apply = require('debug')('tml:bdd:apply');
+const _dbg_bdd   = require('debug')('tml:bdd');
+const _dbg_node  = require('debug')('tml:bdd:node');
+const _dbg_leaf  = require('debug')('tml:bdd:leaf');
+const _dbg_apply = require('debug')('tml:bdd:apply');
 
-const counters = {
-  bdds: 0,
-  apply: 0
-}
+// internal counters for every new bdd and applies
+const _counters = { bdds: 0, apply: 0 };
 
 const options = {
   recursive: false,
@@ -37,53 +35,43 @@ class node {
 		this.hi = hi;
     this.lo = lo;
   }
+  // clones the node object
   clone() { return new node(this.v, this.hi, this.lo); }
-  // key used for map of nodes to their indexes, or for debugging
+  // key used for "map" of nodes, or for debugging
 	get key() { return `${this.v}:${this.hi}/${this.lo}`; }
 }
 
-class op_exists { // existential quantification, to be used with apply()
+// existential quantification, to be used with apply()
+class op_exists {
+  // initialize the existential operator
 	constructor(s) {
-    //da("op_exists()", s, s.length);
     this.s = s;
-    this.dbg = 'exists';
-	}
+    this._dbg = 'exists';
+  }
+  // operator evaluation, b = bdd, x = node's index
 	eval(b, x) {
     const n = b.getnode(x);
-    //da("op_exists", n.key, this.s.length);
     if ((n.v > 0) && (n.v <= this.s.length) && this.s[n.v-1]) {
-      const nn = b.bdd_or(n.hi, n.lo);
-      //da('op_exists nn', nn, 'n.hi', n.hi, 'n.lo', n.lo);
-      return b.getnode(nn);
+      return b.getnode(b.bdd_or(n.hi, n.lo));
     }
-    //da('op_exists n', n.key)
     return n;
 	}
 }
-class op { constructor(_eval, dbg) { this.eval = _eval; this.dbg = dbg; } }
+// operator class wrapping evaluation function and helper _dbg string 
+class op { constructor(_eval, _dbg) { this.eval = _eval; this._dbg = _dbg; } }
+// operators, to be used with apply()
 const op_and      = new op((x, y) => (x &&  y) ? bdds_base.T : bdds_base.F, '&&');
 const op_and_not  = new op((x, y) => (x && !y) ? bdds_base.T : bdds_base.F, '&&!');
 const op_or       = new op((x, y) => (x ||  y) ? bdds_base.T : bdds_base.F, '||');
 
+// bdds base class
 class bdds_base {
+  // F=0 and T=1 consants
 	static get F() { return 0; }
-	static get T() { return 1; }
-	static leaf(n) {
-		const res = n instanceof node
-			?	n.v === 0
-			: n === bdds_base.T || n === bdds_base.F;
-		dbg_leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`);
-		return res;
-	}
-	static trueleaf(n) {
-		const res = n instanceof node
-			? bdds_base.leaf(n) && (n.hi > 0)
-			: n === bdds_base.T;
-		dbg_leaf(`    leaf ${n instanceof node ? n.key : n} is ${res}`);
-		return res;
-	}
+  static get T() { return 1; }
+  // initialize bdds
 	constructor(nvars) {
-    this.id = ++counters.bdds;
+    this.id = ++_counters.bdds;
 		this.V = [];          // all nodes
 		this.M = {};          // node to its index
 		this.dim = 1;         // used for implicit power
@@ -93,23 +81,47 @@ class bdds_base {
     // initialize bdd with 0 and 1 terminals
 		this.add_nocheck(new node(0, 0, 0));
 		this.add_nocheck(new node(0, 1, 1));
-	}
+  }
+  
+  // checks if node is terminal (leaf)
+	static leaf(n) {
+		const res = n instanceof node
+			?	n.v === 0
+			: n === bdds_base.T || n === bdds_base.F;
+		_dbg_leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`);
+		return res;
+  }
+
+  // checks if node is terminal and is T
+	static trueleaf(n) {
+		const res = n instanceof node
+			? bdds_base.leaf(n) && (n.hi > 0)
+			: n === bdds_base.T;
+		_dbg_leaf(`    leaf ${n instanceof node ? n.key : n} is ${res}`);
+		return res;
+  }
+
+  // set virtual power
 	setpow(root, dim, maxw) {
     this.root = root; this.dim = dim; this.maxbdd = 1n<<BigInt(64/maxw);
-    dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw: ${maxw}, maxbdd:${this.maxbdd}`);
-	}
+    _dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw: ${maxw}, maxbdd:${this.maxbdd}`);
+  }
+
+  // add node directly without checking
 	add_nocheck(n) {
 		const r = this.V.length;
 		this.M[n.key] = r;
 		this.V.push(n);
 		return r;
-	}
+  }
+  
+  // adds new node
 	add(n) {
     let r = null;
-    let dbg = '';
+    let _dbg = '';
     do {
       if (!(n.v <= this.nvars)) {
-        dbg_node(`add ${n.key} = ERR`);
+        _dbg_node(`add ${n.key} = ERR`);
         throw Error('Node id too big.');
       }
       if (n.hi === n.lo)  {
@@ -121,22 +133,20 @@ class bdds_base {
         break;
       }
       r = this.add_nocheck(n);
-      dbg = ' nocheck'
+      _dbg = ' nocheck'
     } while (0);
-    dbg_node(`add ${r} (${n.key})${dbg}`);
+    _dbg_node(`add ${r} (${n.key})${_dbg}`);
 		return r;
-	}
+  }
+  
+  // returns node by its index
 	getnode(nid) {
-    //dbd('getnode()', nid, 'dim', this.dim);
 		if (this.dim === 1) return this.V[nid];
 		const m = Number(BigInt(nid) % this.maxbdd);
 		const di = BigInt(nid) / this.maxbdd;
 		const dn = Number(di);
     const n = this.V[m];
-    //dbd('getnode() n.v', n.v, 'm', m, 'di', di, 'maxbdd', this.maxbdd);
-    //dbd(this.nvars * dn);
     if (n.v > 0) n.v += this.nvars * dn;
-    //dbd('getnode() after n.v', n.v);
 		if (bdds.trueleaf(n.hi)) {
       if (dn < this.dim-1)
         n.hi = BigInt(this.root)+this.maxbdd*(di+1n);
@@ -147,16 +157,18 @@ class bdds_base {
         n.lo = BigInt(this.root)+this.maxbdd*(di+1n);
     } else if (!bdds.leaf(n.lo))
       n.lo = BigInt(n.lo) + this.maxbdd * di;
-    //dbd('getnode() returning', n.key);
 		return n;
-	}
+  }
+  
+  // outputs
 	out(os, n) {
 		if (!(n instanceof node))
 			return this.out(`${os}[${n}]`, this.getnode(n)); // colors?
 		if (bdds_base.leaf(n)) return os + bdds_base.trueleaf(n) ? 'T' : 'F';
 		os = this.out(`${os}${n.v}?`, n.hi);
 		return this.out(`${os}:${n.lo}`)
-	}
+  }
+  // returns bdd's length = number of nodes
 	get length() { return this.V.length; }
 }
 
@@ -233,12 +245,12 @@ class bdds extends bdds_base {
   }
   
   static apply(src, x, dst, y, op) {
-    ++counters.apply;
-    const apply_id = counters.apply;
+    ++_counters.apply;
+    const apply_id = _counters.apply;
     if (op === undefined) {
       op = y;
       const r = this.apply_unary_recursive(src, x, dst, op);
-      dbg_apply(`apply(${apply_id}) ${r} ${op.dbg}(${x})${src===dst?' on this':''} (unary)`);
+      _dbg_apply(`apply(${apply_id}) ${r} ${op._dbg}(${x})${src===dst?' on this':''} (unary)`);
       return r
     }
     const Vx = src.getnode(x).clone();
@@ -250,7 +262,7 @@ class bdds extends bdds_base {
       Vx.lo = x;
     } else if (Vx.v === 0) {
       const r = op.eval(Vx.hi, Vy.hi);
-      dbg_apply(`apply(${apply_id}) ${r} (${x}${op.dbg}${y})${src===dst?' on this':''}`);
+      _dbg_apply(`apply(${apply_id}) ${r} (${x}${op._dbg}${y})${src===dst?' on this':''}`);
       return op.eval(Vx.hi, Vy.hi);
     } else {
       v = Vx.v
@@ -262,21 +274,13 @@ class bdds extends bdds_base {
     const r = dst.add(new node(v,
       this.apply(src, Vx.hi, dst, Vy.hi, op),
       this.apply(src, Vx.lo, dst, Vy.lo, op)));
-    dbg_apply(`apply(${apply_id}) ${r} (${x}${op.dbg}${y})${src===dst?' on this':''}`);
+    _dbg_apply(`apply(${apply_id}) ${r} (${x}${op._dbg}${y})${src===dst?' on this':''}`);
     return r;
   }
 
-	static apply_and(src, x, dst, y) {
-    return bdds.apply(src, x, dst, y, op_and);
-  }
-  
-	static apply_and_not(src, x, dst, y) {
-    return bdds.apply(src, x, dst, y, op_and_not);
-  }
-  
-	static apply_or(src, x, dst, y) {
-    return bdds.apply(src, x, dst, y, op_or);
-  }
+	static apply_and    (src, x, dst, y) { return bdds.apply(src, x, dst, y, op_and); }
+	static apply_and_not(src, x, dst, y) { return bdds.apply(src, x, dst, y, op_and_not); }
+	static apply_or     (src, x, dst, y) { return bdds.apply(src, x, dst, y, op_or); }
   
 	static apply_and_ex_perm(src, x, dst, y, s, p, sz) {
 		// da('apply_and_ex_perm x', x, 'y', y, s.slice(0,6));
@@ -463,6 +467,6 @@ class bdds extends bdds_base {
 }
 
 module.exports = {
-  bdds, counters, options,
+  bdds, options,
   node, bdds_base, op, op_exists, op_and, op_and_not, op_or
 }

@@ -14,16 +14,17 @@
 // This is a Javascript rewrite of TML by Tomáš Klapka <tomas@klapka.cz>
 
 const { bdds } = require('./bdds');
+const { bdd_out } = require('./util');
 
-const counters = {
-  lp: 0,   // lps
-  step: 0, // pfp steps
-}
+// debug functions
+const _dbg_parser  = require('debug')('tml:parser');
+const _dbg_dict    = require('debug')('tml:dict');
+const _dbg_pfp     = require('debug')('tml:pfp');
 
-const dbg_parser  = require('debug')('tml:parser');
-const dbg_dict    = require('debug')('tml:dict');
-const dbg_pfp     = require('debug')('tml:pfp');
+// internal counters for lps
+const _counters = { lp: 0 };
 
+// messages
 const identifier_expected     = `Identifier expected`;
 const term_expected           = `Term expected`;
 const comma_dot_sep_expected  = `',', '.' or ':-' expected`;
@@ -35,8 +36,9 @@ const skip_ws = s           => { s.s = s.s.replace(/^\s+/, ''); };
 const skip    = (s, n = 1)  => { s.s = s.s.slice(n); }
 
 // dict represents strings as unique integers
-class dict {                                        
-  static get pad() { return 0; }                    // pad = 0 constant
+class dict {                    
+  // pad = 0 constant                    
+  static get pad() { return 0; }
   // initialize syms and vars tables
 	constructor() {
 		this.syms = [ dict.pad ];
@@ -45,42 +47,47 @@ class dict {
   // gets/stores identifier (symbol or variable) and returns it's index
 	get(s) {
     if (typeof(s) == 'number') {
-      dbg_dict(`get(${s}) by id = ${this.syms[s]}`);
+      _dbg_dict(`get(${s}) by id = ${this.syms[s]}`);
       return this.syms[s];                          // if s is number return symbol by index
     }
 		if (s[0] === '?') {                             // variable:
       const p = this.vars.indexOf(s);
       if (p > 0) {
-        dbg_dict(`get(${s}) variable = -${p}`);
+        _dbg_dict(`get(${s}) variable = -${p}`);
         return -p;                                  // if variable in this.vars, return its index
       }
       this.vars.push(s);                            // else store new variable
-      dbg_dict(`get(${s}) variable = -${this.vars.length-1} (created)`);
+      _dbg_dict(`get(${s}) variable = -${this.vars.length-1} (created)`);
 			return -(this.vars.length-1);                 // and return its index
     }
     const p = this.syms.indexOf(s);                 // symbol
     if (p > 0) {
-      dbg_dict(`get(${s}) symbol = ${p}`);
+      _dbg_dict(`get(${s}) symbol = ${p}`);
       return p;                                     // if symbol in this.syms, return its index
     }
 		this.syms.push(s);                              // else store new symbol
-    dbg_dict(`get(${s}) symbol = ${this.syms.length-1} (created)`);
+    _dbg_dict(`get(${s}) symbol = ${this.syms.length-1} (created)`);
 		return this.syms.length-1;                      // and return its index
-	}
-	bits() { return 32 - Math.clz32(this.syms.length); } // counts bit size of the dictionary
-	nsyms() { return this.syms.length; }              // returns number of stored symbols
+  }
+  // returns number of stored symbols
+	nsyms() { return this.syms.length; }
+  // counts bit size of the dictionary
+	bits() { return 32 - Math.clz32(this.syms.length); }
 }
 
 // helper class for negs or poss of a rule
 class rule_items {
+  // initialize
   constructor(bits, ar) {
-    this.h = bdds.T;       // bdd root
+    this.h = bdds.T;            // bdd root
     this.w = 0;                 // nbodies, will determine the virtual power
     this.x = [];                // existentials
     this.hvars = {};            // how to permute body vars to head vars
     this.bits = bits;           // bitsize
     this.ar = ar;               // arity
   }
+
+  // from arg
 	from_arg(bdd, i, j, k, vij, bits, ar, hvars, m, npad) {
     // helper fn to count BIT from term, arg and bit
     const BIT = (term, arg, b) => ((term*bits+b)*ar+arg);
@@ -119,7 +126,8 @@ class rule_items {
 			}
     }
   }
-  // get variable heads
+
+  // get heads
   get_heads(p, hsym) {
     let x, y, z;
     p.pdbs.setpow(p.db, this.w, p.maxw);
@@ -140,6 +148,7 @@ class rule_items {
 
 // a P-DATALOG rule in bdd form
 class rule {
+  // initialize rule
   constructor(bdd, v, bits, ar) {
     this.poss = new rule_items(bits, ar);
     this.negs = new rule_items(bits, ar);
@@ -199,6 +208,8 @@ class rule {
     const s = bneg ? this.negs : this.poss;
     s.h = bdd.bdd_and_not(s.h, npad.npad);
   }
+  
+  // get heads
   get_heads(p) {
     if (this.hasnegs) {
       return p.pdbs.bdd_and(
@@ -212,7 +223,7 @@ class rule {
 // [pfp] logic program
 class lp {
   constructor() {
-    this.id = ++counters.lp;
+    this.id = ++_counters.lp;
 		this.dict = new dict(); // holds its own dict so we can determine the universe size
     this.pdbs = null;   // db bdd (as db has virtual power)
     this.pprog = null;  // prog bdd
@@ -223,29 +234,31 @@ class lp {
     this.bits = 0;
 	}
 
-	str_read(s) { // parse a string and returns its dict id
-    const dbg = s.s.slice(0, s.s.indexOf(`\n`));
-    let dbg_match;
+  // parse a string and returns its dict id
+	str_read(s) {
+    const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
+    let _dbg_match;
 		let r = null;
 		s.s = s.s.replace(/^\s*(\??[\w|\d]+)\s*/, (_, t) => {
       r = this.dict.get(t);
-      dbg_match = t;
+      _dbg_match = t;
 			return ''; // remove match from input
 		})
 		if (!r) {
-      dbg_parser(`str_read ERR from "${dbg}..."`);
+      _dbg_parser(`str_read ERR from "${_dbg}..."`);
       throw new Error(identifier_expected);
     } 
-    dbg_parser(`str_read "${dbg_match}" (${r}) from "${dbg}"`);
+    _dbg_parser(`str_read "${_dbg_match}" (${r}) from "${_dbg}"`);
 		return r;
 	}
 
-	term_read(s) { // read raw term (no bdd)
-    const dbg = s.s.slice(0, s.s.indexOf(`\n`));
+  // read raw term (no bdd)
+	term_read(s) {
+    const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
 		let r = [];
 		skip_ws(s);
     if (s.s.length === 0) {
-      dbg_parser(`term_read [] (empty string)`);
+      _dbg_parser(`term_read [] (empty string)`);
       return r;
     }
     let b;
@@ -263,67 +276,69 @@ class lp {
 			else {
 				if (c === ',') {
           if (r.length === 1) {
-            dbg_parser(`term_read ERR from "${dbg}"`);
+            _dbg_parser(`term_read ERR from "${_dbg}"`);
             throw new Error(term_expected);
           }
           skip(s, ++i);
-          dbg_parser(`term_read [ ${r.join(', ')} ] from "${dbg}"`)
+          _dbg_parser(`term_read [ ${r.join(', ')} ] from "${_dbg}"`)
           return r;
         }
 				if (c === '.' || c === ':') {
           if (r.length === 1) {
-            dbg_parser(`term_read ERR from "${dbg}"`);
+            _dbg_parser(`term_read ERR from "${_dbg}"`);
             throw new Error(term_expected);
           }
           skip(s, i);
-          dbg_parser(`term_read [ ${r.join(', ')} ] from "${dbg}"`)
+          _dbg_parser(`term_read [ ${r.join(', ')} ] from "${_dbg}"`)
           return r;
         }
 				r.push(this.str_read(s)); i = 0;
 			}
     } while (i < s.s.length);
-    dbg_parser(`term_read ERR from "${dbg}"`);
+    _dbg_parser(`term_read ERR from "${_dbg}"`);
 		throw new Error(comma_dot_sep_expected);
 	}
 
-	rule_read(s) { // read raw rule (no bdd)
-    const dbg = s.s.slice(0, s.s.indexOf(`\n`));
+  // read raw rule (no bdd)
+	rule_read(s) {
+    const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
 		let t, r = [];
 		if ((t = this.term_read(s)).length === 0) {
-      dbg_parser(`rule_read [] (empty string)`)
+      _dbg_parser(`rule_read [] (empty string)`)
       return r;
     }
 		r.push(t);
 		skip_ws(s);
 		if (s.s[0] === '.') { // fact
       skip(s);
-      dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${dbg}"`)
+      _dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${_dbg}"`)
       return r;
     }
 		if (s.s.length < 2 || (s.s[0] !== ':' && s.s[1] !== '-')) {
-      dbg_parser(`rule_read ERR from "${dbg}"`)
+      _dbg_parser(`rule_read ERR from "${_dbg}"`)
       throw new Error (sep_expected);
     }
 		skip(s, 2);
 		do {
 			if ((t = this.term_read(s)).length === 0) {
-        dbg_parser(`rule_read ERR from "${dbg}"`)
+        _dbg_parser(`rule_read ERR from "${_dbg}"`)
         throw new Error(term_expected);
       }
 			r.splice(r.length-1, 0, t); // make sure head is last
 			skip_ws(s);
 			if (s.s[0] === '.') {
         skip(s);
-        dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${dbg}"`)
+        _dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${_dbg}"`)
         return r;
       }
 			if (s.s[0] === ':') {
-        dbg_parser(`rule_read ERR from "${dbg}"`)
+        _dbg_parser(`rule_read ERR from "${_dbg}"`)
         throw new Error(unexpected_char);
       };
 		} while (true);
 	}
 
+  // parses prog
 	prog_read(prog) {
     const s = { s: prog };
 		this.ar = 0;
@@ -347,7 +362,7 @@ class lp {
     }
 
 		this.bits = this.dict.bits();
-    dbg_parser(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw}`);
+    _dbg_parser(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw}`);
 
     this.pdbs = new bdds(this.ar * this.bits);
 		this.pprog = new bdds(this.maxw * this.ar * this.bits);
@@ -355,27 +370,23 @@ class lp {
     for (let i = 0; i < r.length; i++) {
 			const x = r[i];
 			if (x.length === 1) {
-				dbg_parser('prog_read store fact', x);
+				_dbg_parser('prog_read store fact', x);
         this.db = this.pdbs.bdd_or(this.db,
                               new rule(this.pdbs, x, this.bits, this.ar).poss.h);
 			} else {
-				dbg_parser('prog_read store rule', x);
+				_dbg_parser('prog_read store rule', x);
 				this.rules.push(new rule(this.pprog, x, this.bits, this.ar));
 			}
     }
 
-    dbg_pfp(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
-    dbg_pfp(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
-    dbg_pfp(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
+    _dbg_pfp(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
+    _dbg_pfp(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
+    _dbg_pfp(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
     return s.s;
 	}
 
   // single pfp step
 	step() {
-    dbg_pfp('step');
-    // console.log('____________________STEP__________________________');
-		// console.log();
-    ++counters.step;
     let add = bdds.F;
     let del = bdds.F;
 		let s;
@@ -399,29 +410,36 @@ class lp {
     }
     dbs.memos_clear();
     prog.memos_clear();  
-    dbg_pfp('/step');
 	}
 
+  // pfp logic
 	pfp() {
-		let d;        // current db root
-		let t = 0;    // step counter
-		const s = []; // db roots of steps
+		let d;                        // current db root
+		let t = 0;                    // step counter
+		const s = [];                 // db roots of previous steps
 		do {
-			d = this.db;  // get current db root
-      s.push(d);    // store current db root into steps
+			d = this.db;                // get current db root
+      s.push(d);                  // store current db root into steps
       // show step info
 			this.printdb(`step: ${++t} nodes: ${this.pdbs.length} + ${this.pprog.length}\n`)
-			this.step();  // do step
+      _dbg_pfp(`____________________STEP_${t}________________________`);
+			this.step();                // do pfp step
+      _dbg_pfp('/STEP');
 			if (s.includes(this.db)) {  // if db root already resulted from previous step
-        this.printdb('');         // print db
+        this.printdb();           // print db
 				return d === this.db;     // return true(sat) or false(unsat)
 			}
 		} while (true);
 	}
 
+  // prints db (bdd -> tml facts)
 	printdb(os) {
     out(os, this.pdbs, this.db, this.bits, this.ar, 1, this.dict);
-    // if (os != '') dbd(bdd_out(this.pprog, this.pprog.length-1, this.dict));
+    if (!os) {
+      const o = { dot: true, svg: false };
+      bdd_out(this.pdbs, this.dict, o);
+      bdd_out(this.pprog, this.dict, o);
+    }
 	}
 }
 
@@ -439,7 +457,8 @@ function string_read_text(data) {
 
 // output content (TML facts) from the db
 function out(os, b, db, bits, ar, w, d) {
-	const t = b.from_bits(db, bits, ar, w)
+  const t = b.from_bits(db, bits, ar, w)
+  os = os || '';
 	for (let i = 0; i < t.length; i++) {
 		const v = t[i];
 		for (let j = 0; j < v.length; j++) {
@@ -450,7 +469,7 @@ function out(os, b, db, bits, ar, w, d) {
     }
     os += `\n`;
 	}
-	console.log(os);
+  console.log(os);
 }
 
 module.exports = {

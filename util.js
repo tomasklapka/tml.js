@@ -14,50 +14,55 @@
 // This is a Javascript rewrite of TML by Tomáš Klapka <tomas@klapka.cz>
 
 const { spawn } = require('child_process');
+const { writeFileSync } = require('fs');
+const path = require('path');
 
-const options = {
-  bdd_to_svg: false,
-  bdd_to_png: false
-};
+// internal counters for dot files nad graphvizs
+const _counters = { gv:  0, dot: 0 };
 
-const counters = {
-  gv:  0, // graphviz
-  dot: 0  // dots
-};
-
-function bdd_out(b, db, dict) {
-  const dot = bdd_to_dot(b, db, dict);
-  if (options.bdd_to_svg) graphviz(dot, 'svg');
-  if (options.bdd_to_png) graphviz(dot, 'png');
+// converts bdd to dot, svg and/or png
+function bdd_out(b, dict, options = {}) {
+  options.svg = options.hasOwnProperty('svg') ? options.svg : true;
+  options.png = options.hasOwnProperty('png') ? options.png : false;
+  const dot = bdd_to_dot(b, dict, options);
+  if (options.svg) graphviz(dot, 'svg');
+  if (options.png) graphviz(dot, 'png');
 }
 
-function bdd_to_dot(b, db, dict) {
+// converts bdd to dot (optionally saves the dot file)
+function bdd_to_dot(b, dict, options = {}) {
+  options.dot = options.hasOwnProperty('dot') ? options.dot : false;
   const nodes = b.V;
-  let r = [ `graph bdd${++counters.dot} {` ];
+  let r = `graph bdd${++_counters.dot}\n{\n`;
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
-    r.push(`n${i}`);
+    r += `    n${i} `;
     if (n.v === 0 && n.hi === 0) {
-      r.push('[label=0,shape=box];');
+      r += `[label="0 F 0:0/0",shape=box];\n`;
     } else if (n.v === 0 && n.hi === 1) {
-      r.push('[label=1,shape=box];');
+      r += `[label="1 T 0:1/1",shape=box];\n`;
     } else {
-      r.push(`[label="${i} ${dict.get(n.v)||'*'} ${n.key}",shape=circle];`)
+      r += `[label="${i} ${dict.get(n.v)||'*'} ${n.key}",shape=circle];\n`;
     }
   }
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i];
     if (n.v > 0) {
-      r.push(`n${i} -- n${n.lo} [label="F",style=dashed]; n${i} -- n${n.hi} [label="T"];`)
+      r += `    n${i} -- n${n.lo} [label="F",style=dashed];\n`
+        +  `    n${i} -- n${n.hi} [label="T"];\n`;
     }
   }
-  r.push('}');
-  return r.join(" ");
+  r += `}\n`;
+  if (options.dot) {
+    writeFileSync(path.resolve(__dirname, `bdd_${_counters.dot}.dot`), r);
+  }
+  return r;
 }
 
+// draws dot into svg or png
 function graphviz(dot, format = 'svg') {
   return new Promise((resolve, reject) => {
-    const gv = spawn('dot', [ '-T'+format, `-obdd_${++counters.gv}.${format}` ]);
+    const gv = spawn('dot', [ '-T'+format, `-obdd_${_counters.dot}.${format}` ]);
     gv.on('error', (err) => {
       console.log('error: ', err);
       reject(err);

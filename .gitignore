@@ -1,5 +1,6 @@
 temp
 node_modules
+*.dog
 *.svg
 *.png
 .vscode

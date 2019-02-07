@@ -15,29 +15,31 @@
 
 const { lp, string_read_text } = require('./tml');
 
-function load_stream(stream) { // loads stream into string
+// loads string from stream
+function load_stream(stream) {
 	return new Promise((resolve, reject) => {
-		let data = '';
-		stream.on('readable', () => {
+		let r = ''; // resulting string
+		stream.on('readable', () => { // if we can read
       while ((chunk = stream.read()) !== null)
-        data += chunk;
+        r += chunk;     // add stream chunks to string
 		});
-		stream.on('end', () => resolve(data));
-		stream.on('error', reject);    
+		stream.on('end', () => resolve(r)); // resolve string
+		stream.on('error', reject);         // reject if error
 	});
 }
 
+// main
 async function main() {
 	let s;
-	try {
+	try { // read source from stdin
 		process.stdin.setEncoding('utf8');
     s = string_read_text(await load_stream(process.stdin));  
 	} catch (err) {
-		console.log(err); // stdin read error
+		console.log(err);                 // stdin read error
 	}
-	const p = new lp();
-	p.prog_read(s);
-	if (!p.pfp()) console.log('unsat');
+	const p = new lp();                 // new logic program
+	p.prog_read(s);                     // parse source
+	if (!p.pfp()) console.log('unsat'); // pfp
 }
 
 main();
