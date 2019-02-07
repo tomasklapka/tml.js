@@ -1,6 +1,6 @@
 const { lp, string_read_text } = require('./tml');
 
-function load_stream(stream) {
+function load_stream(stream) { // loads stream into string
 	return new Promise((resolve, reject) => {
 		let data = '';
 		stream.on('readable', () => {
@@ -13,11 +13,10 @@ function load_stream(stream) {
 }
 
 async function main() {
-  process.env.DEBUG = '*';
-	const s = {};
+	let s;
 	try {
 		process.stdin.setEncoding('utf8');
-    s.s = string_read_text(await load_stream(process.stdin));  
+    s = string_read_text(await load_stream(process.stdin));  
 	} catch (err) {
 		console.log(err); // stdin read error
 	}
