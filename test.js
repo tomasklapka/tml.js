@@ -389,7 +389,7 @@ describe("lp", function() {
     it("should throw ',', '.' or ':-' expected", function () {
       let p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
       function comma_dot_sep_expected() {
-        assert.throws(() => p.term_read(s), /^Error: \',\', \',\' or \':-\' expected$/);
+        assert.throws(() => p.term_read(s), /^Error: \',\', \'\.\' or \':-\' expected$/);
       }
       s.s = ' a '; comma_dot_sep_expected();
       s.s = ' ?x '; comma_dot_sep_expected();
@@ -448,14 +448,14 @@ describe("lp", function() {
       }
       s.s = '0,,'; separator_expected();
     });
-    it("should throw ',' expected", function () {
+    it("should throw unexpected char", function () {
       const p = new lp();
       const s = {};
-      function comma_expected() {
-        assert.throws(() => p.rule_read(s), /^Error: ',' expected$/);
+      function unexpected_char() {
+        assert.throws(() => p.rule_read(s), /^Error: Unexpected char$/);
       }
-      s.s = '0:-0:'; comma_expected();
-      s.s = '?x :- ?x :'; comma_expected();
+      s.s = '0:-0:'; unexpected_char();
+      s.s = '?x :- ?x :'; unexpected_char();
     });
     it("should parse empty rule", function () {
       let p = new lp(); const s = {};
@@ -523,11 +523,11 @@ describe("lp", function() {
     it("should throw ',' expected", function () {
       const p = new lp();
       let s;
-      function comma_expected() {
-        assert.throws(() => p.prog_read(s), /^Error: ',' expected$/);
+      function unexpected_char() {
+        assert.throws(() => p.prog_read(s), /^Error: Unexpected char$/);
       }
-      s = '0:-0:'; comma_expected();
-      s = '?x :- ?x :'; comma_expected();
+      s = '0:-0:'; unexpected_char();
+      s = '?x :- ?x :'; unexpected_char();
     });
     it("should parse empty program", function () {
       const p = new lp();

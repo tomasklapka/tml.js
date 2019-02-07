@@ -24,10 +24,13 @@ const dbg_parser  = require('debug')('tml:parser');
 const dbg_dict    = require('debug')('tml:dict');
 const dbg_pfp     = require('debug')('tml:pfp');
 
-const sep_expected  = `Term or ':-' or '.' expected`;
-const term_expected = 'Term expected';
+const identifier_expected     = `Identifier expected`;
+const term_expected           = `Term expected`;
+const comma_dot_sep_expected  = `',', '.' or ':-' expected`;
+const sep_expected            = `Term or ':-' or '.' expected`;
+const unexpected_char         = `Unexpected char`;
 
-const er      = x           => { console.log(x); throw new Error(x); }
+// skip_ws or skip 1 or more characters from parsing input
 const skip_ws = s           => { s.s = s.s.replace(/^\s+/, ''); };
 const skip    = (s, n = 1)  => { s.s = s.s.slice(n); }
 
@@ -231,7 +234,7 @@ class lp {
 		})
 		if (!r) {
       dbg_parser(`str_read ERR from "${dbg}..."`);
-      throw new Error('Identifier expected');
+      throw new Error(identifier_expected);
     } 
     dbg_parser(`str_read "${dbg_match}" (${r}) from "${dbg}"`);
 		return r;
@@ -261,7 +264,7 @@ class lp {
 				if (c === ',') {
           if (r.length === 1) {
             dbg_parser(`term_read ERR from "${dbg}"`);
-            throw new Error('Term expected');
+            throw new Error(term_expected);
           }
           skip(s, ++i);
           dbg_parser(`term_read [ ${r.join(', ')} ] from "${dbg}"`)
@@ -270,7 +273,7 @@ class lp {
 				if (c === '.' || c === ':') {
           if (r.length === 1) {
             dbg_parser(`term_read ERR from "${dbg}"`);
-            throw new Error('Term expected');
+            throw new Error(term_expected);
           }
           skip(s, i);
           dbg_parser(`term_read [ ${r.join(', ')} ] from "${dbg}"`)
@@ -280,7 +283,7 @@ class lp {
 			}
     } while (i < s.s.length);
     dbg_parser(`term_read ERR from "${dbg}"`);
-		throw new Error('\',\', \',\' or \':-\' expected');
+		throw new Error(comma_dot_sep_expected);
 	}
 
 	rule_read(s) { // read raw rule (no bdd)
@@ -305,7 +308,7 @@ class lp {
 		do {
 			if ((t = this.term_read(s)).length === 0) {
         dbg_parser(`rule_read ERR from "${dbg}"`)
-        er(term_expected);
+        throw new Error(term_expected);
       }
 			r.splice(r.length-1, 0, t); // make sure head is last
 			skip_ws(s);
@@ -316,7 +319,7 @@ class lp {
       }
 			if (s.s[0] === ':') {
         dbg_parser(`rule_read ERR from "${dbg}"`)
-        throw new Error('\',\' expected');
+        throw new Error(unexpected_char);
       };
 		} while (true);
 	}
@@ -422,6 +425,7 @@ class lp {
 	}
 }
 
+// removes comments
 function string_read_text(data) {
 	let s = '', skip = false;
 	for (let n = 0; n < data.length; n++) {
@@ -433,9 +437,8 @@ function string_read_text(data) {
 	return s;
 }
 
+// output content (TML facts) from the db
 function out(os, b, db, bits, ar, w, d) {
-  // dbd('out os', os, 'db', db, 'bits', bits, 'ar', ar, 'w', w, 'd', d, '/out');
-  // if (os != '') dbd(bdd_out(b, db, d));
 	const t = b.from_bits(db, bits, ar, w)
 	for (let i = 0; i < t.length; i++) {
 		const v = t[i];
@@ -451,5 +454,6 @@ function out(os, b, db, bits, ar, w, d) {
 }
 
 module.exports = {
-  dict, rule_items, rule, lp, string_read_text
+  lp, string_read_text,
+  dict, rule_items, rule, out
 }
