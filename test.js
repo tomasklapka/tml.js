@@ -14,7 +14,8 @@
 
 // OPTIONS:
 const options = {
-	recursive: false // use rec or non rec algos
+	memoization: true, 	// use memoization
+	recursive: false 		// use non rec algos
 }
 const { dict, lp } = require("./lp")(options);
 const { node, bdds, bdds_base } = require("./bdds")(options);
@@ -275,7 +276,7 @@ describe("bdds", function () {
 		assert.deepStrictEqual(b.M, { '0:0/0': 0n, '0:1/1': 1n });
 		if (options.memoization) {
 			const ms = [
-				'memo_and', 'memo_and_not', 'memo_or', 'memo_and_ex', 'memo_copy', 'memo_permute' ];
+				'memo_op', 'memo_and_ex', 'memo_copy', 'memo_permute' ];
 			ms.forEach(function (m) {
 				assert.deepStrictEqual(b[m], {});
 			});
