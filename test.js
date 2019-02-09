@@ -10,14 +10,32 @@
 // from the Author (Ohad Asor).
 // Contact ohad@idni.org for requesting a permission. This license may be
 // modified over time by the Author.
+// Author of Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
-// This is a Javascript rewrite of TML by Tomáš Klapka <tomas@klapka.cz>
-
-const { dict, lp } = require("./tml");
-const { node, bdds, bdds_base, op_exists, options } = require("./bdds");
+// OPTIONS:
+const options = {
+  recursive: false // use rec or non rec algos
+}
+const { dict, lp } = require("./lp")(options);
+const { node, bdds, bdds_base } = require("./bdds")(options);
 
 const assert = require("assert");
 const fixtures = require("./test_fixtures");
+
+// Javascript's JSON impl. doesn't know how to de/serialize BigInts
+const BigInt_JSON_serializer = (key, value) =>
+  (typeof value === 'bigint')
+    ? value.toString() + 'n'
+    : value;
+const BigInt_JSON_deserializer = (key, value) =>
+  (typeof value === 'string' && /^\d+n$/.test(value))
+    ? BigInt(value.slice(0, -1))
+    : value;
+// clone object through JSON for easy compare
+function clone_with_BigInts(obj) {
+  const json = JSON.stringify(obj, BigInt_JSON_serializer);
+  return JSON.parse(json, BigInt_JSON_deserializer);
+}
 
 // fixtures
 const dict_f = function () {
@@ -26,13 +44,15 @@ const dict_f = function () {
   d.get('?var1'); d.get('?var2'); d.get('?var3');
   return d;
 };
-
+// helper for creating bdd
 const nn = (b, varid, hi, lo) => { return b.add(new node(varid, hi, lo)); }
-
 // mocks
 class dict_m extends dict { constructor(l) { super(); this.syms = { length: l } } };
 class dict_m_passthrough extends dict { get(t) { return t; } };
 class bdds_m extends bdds {
+	bdd_or(x, y) { return bdds_m.apply_or(this, x, this, y); }
+	bdd_and(x, y) { return bdds_m.apply_and(this, x, this, y); }
+	bdd_and_not(x, y) { return bdds_m.apply_and_not(this, x, this, y); }
   static apply_or(...a) { return [...a]; }
   static apply_and(...a) { return [...a]; }
   static apply_and_not(...a) { return [...a]; }
@@ -47,7 +67,7 @@ describe('dict', function() {
   it('should initialize syms array by pad element', function() {
     const d = new dict();
     assert.strictEqual(d.get(0), dict.pad);
-    assert.strictEqual(d.nsyms(), 1);
+    assert.strictEqual(d.nsyms, 1);
   });
   describe('get() should', function() {
     it('save a new variable and retrievewhen called again', function() {
@@ -78,34 +98,34 @@ describe('dict', function() {
       assert.strictEqual(d.get(3), 'symbol3');
     });
   });
-  it('nsyms() should return number of symbols', function() {
+  it('nsyms getter should return number of symbols', function() {
     const d = dict_f();
-    assert.strictEqual(d.nsyms(), 4);
+    assert.strictEqual(d.nsyms, 4);
     d.get('symbol4');
-    assert.strictEqual(d.nsyms(), 5);
+    assert.strictEqual(d.nsyms, 5);
     d.get('?var4');
-    assert.strictEqual(d.nsyms(), 5);
+    assert.strictEqual(d.nsyms, 5);
     d.get('symbol5');
-    assert.strictEqual(d.nsyms(), 6);
-    assert.strictEqual(new dict().nsyms(), 1);
-    assert.strictEqual(new dict_m(100).nsyms(), 100);
-    assert.strictEqual(new dict_m(4294967295).nsyms(), 4294967295);
+    assert.strictEqual(d.nsyms, 6);
+    assert.strictEqual(new dict().nsyms, 1);
+    assert.strictEqual(new dict_m(100).nsyms, 100);
+    assert.strictEqual(new dict_m(4294967295).nsyms, 4294967295);
   });
-  it('bits() should return bit size of a dict = 32 - clz32(number of symbols)', function() {
+  it('bits getter should return bit size of a dict = 32 - clz32(number of symbols)', function() {
     const d = dict_f();
-    assert.strictEqual(d.bits(), 3);
+    assert.strictEqual(d.bits, 3);
     d.get('symbol4');
-    assert.strictEqual(d.bits(), 3);
+    assert.strictEqual(d.bits, 3);
     d.get('symbol5');
-    assert.strictEqual(d.bits(), 3);
-    assert.strictEqual(new dict_m(1).bits(), 1);
-    assert.strictEqual(new dict_m(2).bits(), 2);
-    assert.strictEqual(new dict_m(3).bits(), 2);
-    assert.strictEqual(new dict_m(7).bits(), 3);
-    assert.strictEqual(new dict_m(8).bits(), 4);
-    assert.strictEqual(new dict_m(15).bits(), 4);
-    assert.strictEqual(new dict_m(16).bits(), 5);
-    assert.strictEqual(new dict_m(4294967295).bits(), 32);
+    assert.strictEqual(d.bits, 3);
+    assert.strictEqual(new dict_m(1).bits, 1);
+    assert.strictEqual(new dict_m(2).bits, 2);
+    assert.strictEqual(new dict_m(3).bits, 2);
+    assert.strictEqual(new dict_m(7).bits, 3);
+    assert.strictEqual(new dict_m(8).bits, 4);
+    assert.strictEqual(new dict_m(15).bits, 4);
+    assert.strictEqual(new dict_m(16).bits, 5);
+    assert.strictEqual(new dict_m(4294967295).bits, 32);
   });
 });
 describe("node", function () {
@@ -122,8 +142,8 @@ describe("node", function () {
 });
 describe("bdds_base", function () {
   it("should have static F = 0 and T = 0 getters", function () {
-    assert.strictEqual(bdds_base.F, 0);
-    assert.strictEqual(bdds_base.T, 1);
+    assert.strictEqual(bdds_base.F, 0n);
+    assert.strictEqual(bdds_base.T, 1n);
   });
   it("should correctly be initialized", function () {
     const b = new bdds_base(0);
@@ -131,7 +151,7 @@ describe("bdds_base", function () {
     assert.strictEqual(b.maxbdd, 0n);
     assert.strictEqual(b.dim, 1);
     assert.strictEqual(b.nvars, 0);
-    assert.deepStrictEqual(b.M, { '0:0/0': 0, '0:1/1': 1 });
+    assert.deepStrictEqual(b.M, { '0:0/0': 0n, '0:1/1': 1n });
   });
   it("should have length getter", function () {
     const b = new bdds_base();
@@ -166,20 +186,20 @@ describe("bdds_base", function () {
     b.add_nocheck(new node(4294967295, -42, 24));
     assert.strictEqual(b.length, 4);
     assert.deepStrictEqual(b.M, {
-      '0:0/0': 0, '0:1/1': 1, '100:42/24': 2, '4294967295:-42/24': 3 });
+      '0:0/0': 0n, '0:1/1': 1n, '100:42/24': 2n, '4294967295:-42/24': 3n });
   });
   it("add() should add new node", function () {
     const b = new bdds_base(4294967295);
-    assert.strictEqual(b.add(new node(0, 0, 0)), 0);
-    assert.strictEqual(b.add(new node(0, 1, 1)), 1);
-    assert.strictEqual(b.add(new node(4, 0, 1)), 2);
-    assert.strictEqual(b.add(new node(4, 0, 1)), 2);
-    assert.strictEqual(b.add(new node(5, 1, 0)), 3);
-    assert.strictEqual(b.add(new node(5, 1, 0)), 3);
-    assert.strictEqual(b.add(new node(4294967295, 1, 0)), 4);
+    assert.strictEqual(b.add(new node(0, 0, 0)), 0n);
+    assert.strictEqual(b.add(new node(0, 1, 1)), 1n);
+    assert.strictEqual(b.add(new node(4, 0, 1)), 2n);
+    assert.strictEqual(b.add(new node(4, 0, 1)), 2n);
+    assert.strictEqual(b.add(new node(5, 1, 0)), 3n);
+    assert.strictEqual(b.add(new node(5, 1, 0)), 3n);
+    assert.strictEqual(b.add(new node(4294967295, 1, 0)), 4n);
     assert.strictEqual(b.length, 5);
     assert.deepStrictEqual(b.M, {
-      '0:0/0': 0, '0:1/1': 1, '4:0/1': 2, '5:1/0': 3, '4294967295:1/0': 4 });
+      '0:0/0': 0n, '0:1/1': 1n, '4:0/1': 2n, '5:1/0': 3n, '4294967295:1/0': 4n });
     assert.throws(() => b.add(new node(4294967296, 1, 0)), /^Error: Node id too big.$/);
   });
   describe("getnode()", function() {
@@ -224,7 +244,7 @@ describe("bdds_base", function () {
       assert.strictEqual(bdds_base.trueleaf(new node(0, 4294967295, 0)), true);
     });
     it("should return true if node (by id) is true leaf", function () {
-      assert.strictEqual(bdds_base.trueleaf(1), true);
+      assert.strictEqual(bdds_base.trueleaf(1n), true);
     });
     it("should return false if node (by id) isn\'t true leaf", function () {
       assert.strictEqual(bdds_base.trueleaf(new node(0, 0, 1)), false);
@@ -233,18 +253,18 @@ describe("bdds_base", function () {
       assert.strictEqual(bdds_base.trueleaf(new node(-4294967295, 0, 1)), false);
     });
     it("should return false if node (by id) isn\'t true leaf", function () {
-      assert.strictEqual(bdds_base.trueleaf(0), false);
-      assert.strictEqual(bdds_base.trueleaf(2), false);
-      assert.strictEqual(bdds_base.trueleaf(-1), false);
-      assert.strictEqual(bdds_base.trueleaf(4294967295), false);
-      assert.strictEqual(bdds_base.trueleaf(-4294967295), false);
+      assert.strictEqual(bdds_base.trueleaf(0n), false);
+      assert.strictEqual(bdds_base.trueleaf(2n), false);
+      assert.strictEqual(bdds_base.trueleaf(-1n), false);
+      assert.strictEqual(bdds_base.trueleaf(4294967295n), false);
+      assert.strictEqual(bdds_base.trueleaf(-4294967295n), false);
     });
   });
 });
 describe("bdds", function () {
   it("should have static F = 0 and T = 0 getters", function () {
-    assert.strictEqual(bdds.F, 0);
-    assert.strictEqual(bdds.T, 1);
+    assert.strictEqual(bdds.F, 0n);
+    assert.strictEqual(bdds.T, 1n);
   });
   it("should correctly be initialized", function () {
     const b = new bdds(0);
@@ -252,7 +272,7 @@ describe("bdds", function () {
     assert.strictEqual(b.maxbdd, 0n);
     assert.strictEqual(b.dim, 1);
     assert.strictEqual(b.nvars, 0);
-    assert.deepStrictEqual(b.M, { '0:0/0': 0, '0:1/1': 1 });
+    assert.deepStrictEqual(b.M, { '0:0/0': 0n, '0:1/1': 1n });
     if (options.memoization) {
       const ms = [
         'memo_and', 'memo_and_not', 'memo_or', 'memo_and_ex', 'memo_copy', 'memo_permute' ];
@@ -276,19 +296,18 @@ describe("bdds", function () {
     assert.deepStrictEqual(b.bdd_and_not(0, 1), [ b, 0, b, 1 ]);
     assert.deepStrictEqual(b.bdd_and_not(-5, 42), [ b, -5, b, 42 ]);
   });
-  it.skip("memos_clear() should clear memos", function () {
-    const b = new bdds_m();
-    b.memo_and  = { t: 1 }; b.memo_and_not = { t: 2 };
-    b.memo_or   = { t: 3 }; b.memo_and_ex  = { t: 4 };
-    b.memo_copy = { t: 5 }; b.memo_permute = { t: 6 };
-    b.memos_clear();
-    assert.deepStrictEqual(b.memo_and, {});
-    assert.deepStrictEqual(b.memo_and_not, {});
-    assert.deepStrictEqual(b.memo_or, {});
-    assert.deepStrictEqual(b.memo_and_ex, {});
-    assert.deepStrictEqual(b.memo_copy, {});
-    assert.deepStrictEqual(b.memo_permute, {});
-  });
+  if (options.memoization) {
+    it("memos_clear() should clear memos", function () {
+      const b = new bdds_m();
+      b.memo_op   = { t: 1 }; b.memo_and_ex  = { t: 2 };
+      b.memo_copy = { t: 3 }; b.memo_permute = { t: 4 };
+      b.memos_clear();
+      assert.deepStrictEqual(b.memo_op, {});
+      assert.deepStrictEqual(b.memo_and_ex, {});
+      assert.deepStrictEqual(b.memo_copy, {});
+      assert.deepStrictEqual(b.memo_permute, {});
+    });
+  }
   it("apply_and");
   it("apply_and_not");
   it("apply_or");
@@ -297,7 +316,7 @@ describe("bdds", function () {
     it("should apply existential op", function () {
       const b = new bdds(5);
       const r = new bdds(4);
-      const root = nn(b,1,
+      nn(b,1,
         nn(b,2,
           nn(b,3,
             nn(b,4, 0, 1),
@@ -308,33 +327,29 @@ describe("bdds", function () {
             0,
             nn(b,5,
               1,
-              nn(b,0, 0, 0))), //0
+              nn(b,0, 0, 0))),
           2));
-      // console.log(b);
-      // op = new op_exists([ true, false, true, false, true ]);
-      // let res;
-      // res = bdds.apply(b, 0, r, op); console.log('r0', res); // 0
-      // res = bdds.apply(b, 1, r, op); console.log('r1', res); // 1
-      // res = bdds.apply(b, 2, r, op); console.log('r2', res); // 2
-      // res = bdds.apply(b, 3, r, op); console.log('r3', res); // 1
-      // res = bdds.apply(b, 4, r, op); console.log('r4', res); // 1
-      // res = bdds.apply(b, 5, r, op); console.log('r5', res); // 1
-      // res = bdds.apply(b, 6, r, op); console.log('r6', res); // 1
-      // res = bdds.apply(b, 7, r, op); console.log('r7', res); // 1
-      // res = bdds.apply(b, 8, r, op); console.log('r8', res); // 1
-      // res = bdds.apply(b, 9, r, op); console.log('r9', res); // 1
+      const s = [ true, false, true, false, true ];
+      let act;
+      act = bdds.apply_ex(b, 0n, r, s); assert.strictEqual(act, 0n);
+      act = bdds.apply_ex(b, 1n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 2n, r, s); assert.strictEqual(act, 2n);
+      act = bdds.apply_ex(b, 3n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 4n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 5n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 6n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 7n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 8n, r, s); assert.strictEqual(act, 1n);
+      act = bdds.apply_ex(b, 9n, r, s); assert.strictEqual(act, 1n);
     });
   });
   describe("sat()", function () {
-    it("should satisfy", function () {
-      const b = new bdds_m();
-
-    });
+    it("...");
   });
-  it("allsat");
-  it("ite");
-  it("permute");
-  it("copy");
+  it("allsat()");
+  it("ite()");
+  it("permute()");
+  it("copy()");
   describe("from_bit()", function () {
     it("adds node with high=true and low=false if value is true", function () {
       const b = new bdds_m();
@@ -357,7 +372,7 @@ describe("bdds", function () {
 describe("lp", function() {
   it("should initialize correctly", function () {
     const p = new lp();
-    assert.strictEqual(p.id, 1);
+    assert.strictEqual(p._id, 1);
     assert.strictEqual(p.db, bdds_base.F);
     assert.strictEqual(p.dict instanceof dict, true);
     assert.deepStrictEqual(p.rules, []);
@@ -546,11 +561,10 @@ describe("lp", function() {
     });
     it("should parse empty program", function () {
       const p = new lp();
-      let s = '    ';
-      s = p.prog_read(s);
-      assert.strictEqual(s, '');
+      const s = '    ';
+      p.prog_read(s);
       assert.strictEqual(p.ar, 0);
-      assert.strictEqual(p.db, 0);
+      assert.strictEqual(p.db, 0n);
       assert.strictEqual(p.maxw, 0);
       assert.strictEqual(p.bits, 1);
       assert.strictEqual(p.pdbs.length, 2);
@@ -558,9 +572,8 @@ describe("lp", function() {
     });
     it("should parse program", function () {
       const p = new lp();
-      let s = 'symbol. ~symbol. e 1 2. e ?x ?y :- e ?x ?z, e ?z ?y.';
-      s = p.prog_read(s);
-      assert.strictEqual(s, '');
+      const s = 'symbol. ~symbol. e 1 2. e ?x ?y :- e ?x ?z, e ?z ?y.';
+      p.prog_read(s);
       assert.strictEqual(p.dict.get('symbol'), 1);
       assert.strictEqual(p.dict.get('e'), 2);
       assert.strictEqual(p.dict.get('1'), 3);
@@ -573,11 +586,12 @@ describe("lp", function() {
       assert.deepStrictEqual(p.pdbs.M, fixtures.lp1_pdbs_M);
       assert.deepStrictEqual(p.pprog.M, fixtures.lp1_pprog_M);
       assert.strictEqual(p.ar, 3);
-      assert.strictEqual(p.db, 76);
+      assert.strictEqual(p.db, 76n);
       assert.strictEqual(p.maxw, 2);
       assert.strictEqual(p.bits, 3);
-      //console.log(p.rules);
-      //assert.deepStrictEqual(p.rules[0], fixtures.lp1_rules[0]);
+      const act = clone_with_BigInts(p.rules[0])
+      const exp = fixtures.lp1_rules[0];
+      assert.deepStrictEqual(act, exp);
     });
   });
   describe("step()", function () {
@@ -587,20 +601,3 @@ describe("lp", function() {
     it("should run steps until a fixed point");
   });
 });
-
-/*
-
-var tests = [
-    {args: [1, 2],       expected: 3},
-    {args: [1, 2, 3],    expected: 6},
-    {args: [1, 2, 3, 4], expected: 10}
-  ];
-
-  tests.forEach(function(test) {
-    it('correctly adds ' + test.args.length + ' args', function() {
-      var res = add.apply(null, test.args);
-      assert.strictEqual(res, test.expected);
-    });
-  });
-
-*/
