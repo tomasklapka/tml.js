@@ -1,1 +1,1 @@
-require('./tml.js');
+require('./tml.js').main();

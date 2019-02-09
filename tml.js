@@ -67,4 +67,7 @@ async function main() {
   return r ? 0 : 1;
 }
 
-module.exports = main();
+module.exports = {
+  lp, string_read_text,
+  main
+};

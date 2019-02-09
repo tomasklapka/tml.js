@@ -1,7 +1,7 @@
 {
-  "name": "jstml",
-  "version": "1.0.0",
-  "main": "tml.js",
+  "name": "tml.js",
+  "version": "0.0.1",
+  "main": "index.js",
   "private": true,
   "scripts": {
     "start": "node ./index",
