@@ -17,6 +17,7 @@ Can find us on ##idni @freenode
   * **node** - A node in a BDD structure.
   * **bdds_base** - Base class for BDD structures.
   * **bdds_rec** - Class for BDD structure with recursive algos.
+  * **op** - Wrapper class for apply operators.
 
 * **bdds\_non\_rec.js** - BDDs extension with non-recursive algos.
 * **index.js** - Just a loader of tml.js.
