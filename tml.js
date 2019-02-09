@@ -14,7 +14,7 @@
 
 // OPTIONS
 const options = {
-  recursive: false
+	recursive: false
 }
 const { lp, string_read_text } = require('./lp')(options);
 
@@ -23,8 +23,8 @@ function load_stream(stream) {
 	return new Promise((resolve, reject) => {
 		let r = ''; // resulting string
 		stream.on('readable', () => { // if we can read
-      while ((chunk = stream.read()) !== null)
-        r += chunk;     // add stream chunks to string
+			while ((chunk = stream.read()) !== null)
+				r += chunk;     // add stream chunks to string
 		});
 		stream.on('end', () => resolve(r)); // resolve string
 		stream.on('error', reject);         // reject if error
@@ -34,40 +34,40 @@ function load_stream(stream) {
 // main
 async function main() {
 	let s = null;
-  //// input for IDE debugging (avoids configuration of stdin)
-  // s = "e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.";
-  // s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
-  // unless s, read source from stdin
-  if (s === null) {
-    try {
-      process.stdin.setEncoding('utf8');
-      s = string_read_text(await load_stream(process.stdin));  
-    } catch (err) {   // stdin read error
-      console.log('Read error:', err);
-      return 4;
-    }
-  }
-  const p = new lp(); // p = logic program
-  try {
-    p.prog_read(s);   // parse source from s
-  } catch (err) {     // parse error
-    console.log('Parse error:', err);
-    return 3;
-  }
-  let r = false;
-  try {
-    r = p.pfp();      // run pfp logic program
-  } catch (err) {     // pfp error
-    console.log('PFP error', err);
-    return 2;
-  }
-  if (!r) {           // unsat 
-    console.log('unsat');
-  }
-  return r ? 0 : 1;
+	//// input for IDE debugging (avoids configuration of stdin)
+	// s = "e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.";
+	// s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
+	// unless s, read source from stdin
+	if (s === null) {
+		try {
+			process.stdin.setEncoding('utf8');
+			s = string_read_text(await load_stream(process.stdin));
+		} catch (err) {   // stdin read error
+			console.log('Read error:', err);
+			return 4;
+		}
+	}
+	const p = new lp(); // p = logic program
+	try {
+		p.prog_read(s);   // parse source from s
+	} catch (err) {     // parse error
+		console.log('Parse error:', err);
+		return 3;
+	}
+	let r = false;
+	try {
+		r = p.pfp();      // run pfp logic program
+	} catch (err) {     // pfp error
+		console.log('PFP error', err);
+		return 2;
+	}
+	if (!r) {           // unsat
+		console.log('unsat');
+	}
+	return r ? 0 : 1;
 }
 
 module.exports = {
-  lp, string_read_text,
-  main
+	lp, string_read_text,
+	main
 };
