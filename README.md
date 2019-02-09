@@ -10,7 +10,7 @@ Can find us on ##idni @freenode
 * **lp.js** - Logic program. Contains classes:
   * **dict** - Symbols and variables map to integers (varids).
   * **rule** - P-DATALOG rule
-  * **rule_items** - Possitive/negative items of a rule
+  * **rule_items** - Positive/negative items of a rule
   * **lp** - Logic program. Parses source into BDDs and into rules and runs PFP steps.
 
 * **bdds.js** - BDD structure and operations, contains classes:

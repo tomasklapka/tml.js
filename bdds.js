@@ -152,9 +152,9 @@ class bdds_base {
 		} else if (!bdds.leaf(n.lo))
 			n.lo = BigInt(n.lo) + this.maxbdd * di;
 			_dbg_apply( `getnode(${nid}) = ${n.key} di:${di} dn:${dn} ` +
-									`this.V[m=${m}]: `, this.V[m].key);// +
-									// `        ` +
-									// `this.maxbdd:${this.maxbdd} this.nvars:`, this.nvars);
+				`this.V[m=${m}]: `, this.V[m].key);// +
+				// `        ` +
+				// `this.maxbdd:${this.maxbdd} this.nvars:`, this.nvars);
 			return n;
 	}
 	// returns bdd's length = number of nodes

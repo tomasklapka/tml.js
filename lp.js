@@ -412,8 +412,7 @@ class lp {
 			const x = r[i];
 			if (x.length === 1) {
 				_dbg_parser('prog_read store fact', x);
-				this.db = this.pdbs.bdd_or(this.db,
-															new rule(this.pdbs, x, this.bits, this.ar).poss.h);
+				this.db = this.pdbs.bdd_or(this.db, new rule(this.pdbs, x, this.bits, this.ar).poss.h);
 			} else {
 				_dbg_parser('prog_read store rule', x);
 				this.rules.push(new rule(this.pprog, x, this.bits, this.ar));
