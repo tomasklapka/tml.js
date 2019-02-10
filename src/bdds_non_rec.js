@@ -15,7 +15,6 @@
 "use strict";
 
 const { node, bdds_rec } = require('./bdds')();
-const { int } = require('./int');
 
 // debug functions
 const _dbg_apply = require('debug')('tml:bdd_non_rec::apply');
@@ -33,9 +32,9 @@ class bdds_non_rec extends bdds_rec {
 		const parents = [];                   // path from root to the current node
 		let ts = s.LO;                        // current traversing state
 		let n = get(x);                       // current node
-		let nn = int(0);                      // new node
-		let high = int(0);                    // last high leaf
-		let low = int(0);                     // last low leaf
+		let nn = bdds_non_rec.F;              // new node
+		let high = bdds_non_rec.F;            // last high leaf
+		let low = bdds_non_rec.F;             // last low leaf
 		do {                                  // traversing the binary tree
 			if (ts === s.LO) {                  // search low
 				_dbg_apply('apply LO n', n.key, n.lo);

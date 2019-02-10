@@ -14,10 +14,11 @@
 
 "use strict";
 
-// OPTIONS:
+// DEFAULT OPTIONS
 const options = {
 	memoization: true,
-	recursive: false
+	recursive: false,
+	int_size: 32
 }
 let bdds = null; // bdds class (to be loaded when required)
 // debug functions
@@ -28,7 +29,8 @@ const _dbg_apply = require('debug')('tml:bdd:apply');
 // internal counters for every bdds, apply calls and ops.
 const _counters = { bdds: 0, apply: 0, op: 0 };
 
-const { int } = require('./int');
+const int_wrapper = require('./int');
+let int; // int function to be populated when module initiated
 
 // node in a bdd tree
 class node {
@@ -103,7 +105,7 @@ class bdds_base {
 	// set virtual power
 	setpow(root, dim, maxw) {
 		_dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw:${maxw}, maxbdd:${this.maxbdd}`);
-		this.root = root; this.dim = dim; this.maxbdd = int(1).shln(Math.floor(64/maxw));
+		this.root = root; this.dim = dim; this.maxbdd = int(1).shln(Math.floor(options.int_size/maxw));
 		_dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw:${maxw}, maxbdd:${this.maxbdd}`);
 		return this.root;
 	}
@@ -415,6 +417,9 @@ class bdds_rec extends bdds_base {
 module.exports = (o = {}) => {
 	options.memoization = o.hasOwnProperty('memoization') ? o.memoization : options.memoization;
 	options.recursive = o.hasOwnProperty('recursive') ? o.recursive : options.recursive;
+	options.int_size = o.hasOwnProperty('int_size') ? o.int_size : options.int_size;
+	// load int wrapper class depending on the int size
+	int = int_wrapper(options.int_size);
 	// load rec or non rec version of bdds class
 	bdds = options.recursive ? bdds_rec : require('./bdds_non_rec').bdds_non_rec;
 	return {

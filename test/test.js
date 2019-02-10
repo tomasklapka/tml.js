@@ -22,7 +22,7 @@ const options = {
 const lp_pfp = require("../src/lp");
 const { dict, lp } = lp_pfp(options);
 const { node, bdds, bdds_base } = require("../src/bdds")(options);
-const { int } = require("../src/int");
+const int = require("../src/int")(32);
 
 const assert = require("assert");
 const fixtures = require("./test_fixtures");
@@ -176,15 +176,15 @@ describe("bdds_base", function () {
 		b.setpow(int(10), 2, 2);
 		assert.strictEqual(b.dim, 2);
 		assert.strictEqual(b.root.eq(int(10)), true);
-		assert.strictEqual(b.maxbdd.eq(int(4294967296)), true);
+		assert.strictEqual(b.maxbdd.eq(int(65536)), true);
 		b.setpow(int(4294967296), 3, 4);
 		assert.strictEqual(b.dim, 3);
 		assert.strictEqual(b.root.eq(int(4294967296)), true);
-		assert.strictEqual(b.maxbdd.eq(int(65536)), true);
-		b.setpow(int(0), 1, 8);
 		assert.strictEqual(b.maxbdd.eq(int(256)), true);
-		b.setpow(int(0), 1, 16);
+		b.setpow(int(0), 1, 8);
 		assert.strictEqual(b.maxbdd.eq(int(16)), true);
+		b.setpow(int(0), 1, 16);
+		assert.strictEqual(b.maxbdd.eq(int(4)), true);
 	});
 	it("add_nocheck() should add new node withouth checking", function () {
 		const b = new bdds_base();

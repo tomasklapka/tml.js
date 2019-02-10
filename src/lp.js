@@ -14,14 +14,16 @@
 
 "use strict";
 
-// OPTIONS:
+// DEFAULT OPTIONS
 const options = {
-	recursive: false // use rec or non rec algos
+	recursive: false, // use rec or non rec algos
+	int_size: 32
 }
 let bdds = null; // bdds class (to be loaded when required)
 // load helper function for exporting bdds to dot, svg and/or png
 // const { bdd_out } = require('./util');
-const { int } = require('./int');
+const int_wrapper = require('./int');
+let int; // int function to be populated when module initiated
 
 // debug functions
 const _dbg_parser  = require('debug')('tml:parser');
@@ -516,7 +518,11 @@ function out(os, b, db, bits, ar, w, d) {
 
 module.exports = (o = {}) => {
 	options.recursive = o.hasOwnProperty('recursive') ? o.recursive : options.recursive;
-	bdds = require('./bdds')(options).bdds // load bdds class
+	options.int_size = o.hasOwnProperty('int_size') ? o.int_size : options.int_size;
+	// load int wrapper class depending on the int size
+	int = int_wrapper(options.int_size);
+	// load rec or non rec version of bdds class
+	bdds = require('./bdds')(options).bdds
 	return {
 		lp, string_read_text,
 		dict, rule_items, rule,

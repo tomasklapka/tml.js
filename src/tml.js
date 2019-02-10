@@ -14,9 +14,10 @@
 
 "use strict";
 
-// OPTIONS
+// DEFAULT OPTIONS
 const options = {
-	recursive: false
+	recursive: false, // true to use bdds_non_rec ?
+	int_size: 32      // > 32 uses BigInt/bn.js
 }
 
 const { lp, string_read_text } = require("./lp")(options);
@@ -25,8 +26,8 @@ const { lp, string_read_text } = require("./lp")(options);
 function load_stream(stream) {
 	return new Promise((resolve, reject) => {
 		let r = ''; // resulting string
-    stream.on('readable', () => { // if we can read
-      let chunk;
+		stream.on('readable', () => { // if we can read
+			let chunk;
 			while ((chunk = stream.read()) !== null)
 				r += chunk;     // add stream chunks to string
 		});
