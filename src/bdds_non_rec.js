@@ -12,7 +12,11 @@
 // modified over time by the Author.
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
+"use strict";
+
 const { node, bdds_rec } = require('./bdds')();
+const { int } = require('./int');
+
 // debug functions
 const _dbg_apply = require('debug')('tml:bdd_non_rec::apply');
 // JS enum emulated by freezing the object
@@ -29,9 +33,9 @@ class bdds_non_rec extends bdds_rec {
 		const parents = [];                   // path from root to the current node
 		let ts = s.LO;                        // current traversing state
 		let n = get(x);                       // current node
-		let nn = 0;                           // new node
-		let high = 0;                         // last high leaf
-		let low = 0;                          // last low leaf
+		let nn = int(0);                      // new node
+		let high = int(0);                    // last high leaf
+		let low = int(0);                     // last low leaf
 		do {                                  // traversing the binary tree
 			if (ts === s.LO) {                  // search low
 				_dbg_apply('apply LO n', n.key, n.lo);
@@ -62,7 +66,7 @@ class bdds_non_rec extends bdds_rec {
 				_dbg_apply('applied child', nn, n.lo, n.key, x, parents);
 				if (parents.length === 0) break;  // we are back at the top -> break inf. loop
 				n = parents.pop();                // go up
-				if (nn === n.lo) {                // if we operated on low
+				if (nn.eq(n.lo)) {                // if we operated on low
 					low = nn; ts = s.HI;            // set new low and go high
 				} else {                          // else we operated on high already
 					high = nn; ts = s.OP;           // set new high and go op

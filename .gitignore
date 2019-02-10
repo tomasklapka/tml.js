@@ -1,6 +1,9 @@
 temp
 node_modules
+dist
+build
+.bin
+.vscode
 *.dot
 *.svg
 *.png
-.vscode

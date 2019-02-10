@@ -10,8 +10,9 @@
 // from the Author (Ohad Asor).
 // Contact ohad@idni.org for requesting a permission. This license may be
 // modified over time by the Author.
+// Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
-// This is a Javascript rewrite of TML by Tomáš Klapka <tomas@klapka.cz>
+"use strict";
 
 const { spawn } = require('child_process');
 const { writeFileSync } = require('fs');

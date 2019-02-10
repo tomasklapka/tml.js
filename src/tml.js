@@ -12,17 +12,21 @@
 // modified over time by the Author.
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
+"use strict";
+
 // OPTIONS
 const options = {
 	recursive: false
 }
-const { lp, string_read_text } = require('./lp')(options);
+
+const { lp, string_read_text } = require("./lp")(options);
 
 // loads string from stream
 function load_stream(stream) {
 	return new Promise((resolve, reject) => {
 		let r = ''; // resulting string
-		stream.on('readable', () => { // if we can read
+    stream.on('readable', () => { // if we can read
+      let chunk;
 			while ((chunk = stream.read()) !== null)
 				r += chunk;     // add stream chunks to string
 		});

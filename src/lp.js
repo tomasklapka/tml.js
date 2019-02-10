@@ -12,13 +12,17 @@
 // modified over time by the Author.
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
+"use strict";
+
 // OPTIONS:
 const options = {
 	recursive: false // use rec or non rec algos
 }
 let bdds = null; // bdds class (to be loaded when required)
 // load helper function for exporting bdds to dot, svg and/or png
-const { bdd_out } = require('./util');
+// const { bdd_out } = require('./util');
+const { int } = require('./int');
+
 // debug functions
 const _dbg_parser  = require('debug')('tml:parser');
 const _dbg_dict    = require('debug')('tml:dict');
@@ -53,7 +57,7 @@ class dict {
 	}
 	// gets/stores identifier (symbol or variable) and returns it's index
 	get(s) {
-		if (typeof(s) == 'number') {    // if s is number
+		if (typeof(s) === 'number') {    // if s is number
 			_dbg_dict(`get(${s}) by id = ${this.syms[s]}`);
 			return this.syms[s];          //   return symbol by index
 		}
@@ -101,7 +105,9 @@ class rule_items {
 	// npad?
 	from_arg(bdd, i, j, k, vij, bits, ar, hvars, m, npad) {
 		// helper fn to count BIT from term, arg and bit
-		const BIT = (term, arg, b) => ((term*bits+b)*ar+arg);
+		const BIT = (term, arg, b) => {
+			return int(term).mul(int(bits)).add(int(b)).mul(int(ar)).add(int(arg));
+		}
 		let notpad = bdds.T;
 		if (m.hasOwnProperty(vij)) {          // if seen
 			_dbg_rule(`next m[vij]:${vij}:${m[vij]}`);
@@ -195,8 +201,7 @@ class rule {
 				_dbg_rule(`         head[${i}] = ${head[i]} (sym)`);
 				for (let b = 0; b != bits; ++b) {
 					const BIT = (term,arg,b) => {
-						// _dbg_rule(`           BIT[${term}, ${arg}, ${b}] = ${(term*bits+b)*ar+arg}`);
-						return ((term*bits+b)*ar+arg)
+						return int(term).mul(int(bits)).add(int(b)).mul(int(ar)).add(int(arg));
 					};
 					const res = bdd.from_bit(BIT(0, i, b), (head[i]&(1<<b)) > 0);
 					const _dbg = this.hsym;
@@ -464,9 +469,10 @@ class lp {
 			//return; /// only 1 step
 			this.step();                // do pfp step
 			_dbg_pfp('/STEP');
-			if (s.includes(this.db)) {  // if db root already resulted from previous step
+			if (s.find(db=>db.eq(this.db)) != undefined) {
+			//if (s.includes(this.db)) {  // if db root already resulted from previous step
 				this.printdb();           // print db
-				return d === this.db;     // return true(sat) or false(unsat)
+				return d.eq(this.db);     // return true(sat) or false(unsat)
 			}
 		} while (true);
 	}
@@ -475,8 +481,8 @@ class lp {
 		out(os, this.pdbs, this.db, this.bits, this.ar, 1, this.dict);
 		if (!os) {
 			const o = { dot: true, svg: false };
-			bdd_out(this.pdbs, this.dict, o);
-			bdd_out(this.pprog, this.dict, o);
+			// bdd_out(this.pdbs, this.dict, o);
+			// bdd_out(this.pprog, this.dict, o);
 		}
 	}
 }

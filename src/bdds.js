@@ -12,6 +12,8 @@
 // modified over time by the Author.
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
+"use strict";
+
 // OPTIONS:
 const options = {
 	memoization: true,
@@ -26,13 +28,15 @@ const _dbg_apply = require('debug')('tml:bdd:apply');
 // internal counters for every bdds, apply calls and ops.
 const _counters = { bdds: 0, apply: 0, op: 0 };
 
+const { int } = require('./int');
+
 // node in a bdd tree
 class node {
 	// initialize node
 	constructor(varid, hi, lo) {
-		this.v  = BigInt(varid);
-		this.hi = BigInt(hi);
-		this.lo = BigInt(lo);
+		this.v  = int(varid);
+		this.hi = int(hi);
+		this.lo = int(lo);
 	}
 	// clones the node object
 	clone() { return new node(this.v, this.hi, this.lo); }
@@ -49,14 +53,14 @@ class op {
 	}
 }
 // operators, to be used with apply()
-const op_and      = new op((x, y) => (x &&  y) ? bdds_base.T : bdds_base.F, '&&');
-const op_and_not  = new op((x, y) => (x && !y) ? bdds_base.T : bdds_base.F, '&&!');
-const op_or       = new op((x, y) => (x ||  y) ? bdds_base.T : bdds_base.F, '||');
+const op_and      = new op((x, y) => (x.and(y)) ? bdds_base.T : bdds_base.F, '&&');
+const op_and_not  = new op((x, y) => (x.and(y.not())) ? bdds_base.T : bdds_base.F, '&&!');
+const op_or       = new op((x, y) => (x.or(y)) ? bdds_base.T : bdds_base.F, '||');
 // existential quantification (initialize with s = existentials)
 const op_exists   = s => new op((b, x) => {
 	// operator evaluation, b = bdd, x = node's index
 	const n = b.getnode(x);
-	if ((n.v > 0n) && (n.v <= BigInt(s.length)) && s[n.v-1n]) {
+	if ((n.v.gt(int(0))) && (n.v.lte(int(s.length))) && s[n.v.sub(int(1))]) {
 		return b.getnode(b.bdd_or(n.hi, n.lo));
 	}
 	return n;
@@ -65,17 +69,17 @@ const op_exists   = s => new op((b, x) => {
 // bdds base class
 class bdds_base {
 	// F=0 and T=1 consants
-	static get F() { return 0n; }
-	static get T() { return 1n; }
+	static get F() { return int(0); }
+	static get T() { return int(1); }
 	// initialize bdds
 	constructor(nvars) {
 		this._id = ++_counters.bdds;
 		this.V = [];          // all nodes
 		this.M = {};          // node to its index
 		this.dim = 1;         // used for implicit power
-		this.nvars = nvars;   // number of vars
-		this.root = 0n;       // root of bdd
-		this.maxbdd = 0n;     // used for implicit power
+		this.nvars = int(nvars);   // number of vars
+		this.root = int(0);       // root of bdd
+		this.maxbdd = int(0);     // used for implicit power
 		// initialize bdd with 0 and 1 terminals
 		this.add_nocheck(new node(0, 0, 0));
 		this.add_nocheck(new node(0, 1, 1));
@@ -83,28 +87,29 @@ class bdds_base {
 	// checks if node is terminal (leaf)
 	static leaf(n) {
 		const res = n instanceof node
-			? n.v === 0n
-			: n == bdds_base.T || n == bdds_base.F;
+			? n.v.eq(int(0))
+			: n.eq(bdds_base.T) || n.eq(bdds_base.F);
 		_dbg_leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`);
 		return res;
 	}
 	// checks if node is terminal and is T
 	static trueleaf(n) {
 		const res = n instanceof node
-			? bdds_base.leaf(n) && (n.hi > 0n)
-			: n === bdds_base.T;
+			? bdds_base.leaf(n) && (n.hi.gt(int(0)))
+			: n.eq(bdds_base.T);
 		_dbg_leaf(`    leaf ${n instanceof node ? n.key : n} is ${res}`);
 		return res;
 	}
 	// set virtual power
 	setpow(root, dim, maxw) {
-		this.root = root; this.dim = dim; this.maxbdd = 1n<<BigInt(Math.floor(64/maxw));
+		_dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw:${maxw}, maxbdd:${this.maxbdd}`);
+		this.root = root; this.dim = dim; this.maxbdd = int(1).shln(Math.floor(64/maxw));
 		_dbg_bdd(`setpow to root:${this.root}, dim:${this.dim}, maxw:${maxw}, maxbdd:${this.maxbdd}`);
 		return this.root;
 	}
 	// add node directly without checking
 	add_nocheck(n) {
-		const r = BigInt(this.V.length);
+		const r = int(this.V.length);
 		this.M[n.key] = r;
 		this.V.push(n);
 		return r;
@@ -114,11 +119,11 @@ class bdds_base {
 		let r = null;
 		let _dbg = '';
 		do {
-			if (n.v > this.nvars) {
+			if (n.v.gt(this.nvars)) {
 				_dbg_node(`add ${n.key} = ERR`);
 				throw Error('Node id too big.');
 			}
-			if (n.hi === n.lo)  {
+			if (n.hi.eq(n.lo))  {
 				r = n.hi;
 				break;
 			}
@@ -136,26 +141,33 @@ class bdds_base {
 	getnode(nid) {
 		if (this.dim === 1) return this.V[nid];
 		// dim > 1 ...
-		const m = Number(BigInt(nid) % this.maxbdd);
-		const di = BigInt(nid) / this.maxbdd;
+		const m = Number(int(nid).mod(this.maxbdd));
+		const di = int(nid).div(this.maxbdd);
 		const dn = Number(di);
 		const n = this.V[m].clone(); // this damn clone!!!
-		if (n.v > 0) n.v += BigInt(this.nvars) * di;
+		if (n.v.gt(int(0))) n.v = n.v.add(int(this.nvars).mul(di));
 		if (bdds.trueleaf(n.hi)) {
-			if (dn < this.dim-1)
-				n.hi = BigInt(this.root)+this.maxbdd*(di+1n);
-		} else if (!bdds.leaf(n.hi))
-			n.hi = BigInt(n.hi) + this.maxbdd * di;
+			if (dn < this.dim-1) {
+				n.hi = int(this.root).add(this.maxbdd.mul(di.add(int(1))));
+			}
+		} else {
+			if (!bdds.leaf(n.hi)) {
+				n.hi = int(n.hi).add(this.maxbdd.mul(di));
+			}
+		}
 		if (bdds.trueleaf(n.lo)) {
-			if (dn < this.dim-1)
-				n.lo = BigInt(this.root)+this.maxbdd*(di+1n);
-		} else if (!bdds.leaf(n.lo))
-			n.lo = BigInt(n.lo) + this.maxbdd * di;
-			_dbg_apply( `getnode(${nid}) = ${n.key} di:${di} dn:${dn} ` +
-				`this.V[m=${m}]: `, this.V[m].key);// +
-				// `        ` +
-				// `this.maxbdd:${this.maxbdd} this.nvars:`, this.nvars);
-			return n;
+			if (dn < this.dim-1) {
+				n.lo = int(this.root).add(this.maxbdd.mul((di.add(int(1)))));
+			}
+		} else {
+			if (!bdds.leaf(n.lo)) {
+				n.lo = int(n.lo).add(this.maxbdd.mul(di));
+			}
+		}
+		_dbg_apply( `getnode(${nid}) = ${n.key} di:${di} dn:${dn} ` + `this.V[m=${m}]: `, this.V[m].key);// +
+			// `        ` +
+			// `this.maxbdd:${this.maxbdd} this.nvars:`, this.nvars);
+		return n;
 	}
 	// returns bdd's length = number of nodes
 	get length() { return this.V.length; }
@@ -192,9 +204,9 @@ class bdds_rec extends bdds_base {
 		return r;
 	}
 	from_bit(x, v) {
-		const n = v > 0
-			? new node(x+1, bdds_base.T, bdds_base.F)
-			: new node(x+1, bdds_base.F, bdds_base.T);
+		const n = v
+			? new node(x.add(int(1)), bdds_base.T, bdds_base.F)
+			: new node(x.add(int(1)), bdds_base.F, bdds_base.T);
 		const res = this.add(n);
 		_dbg_bdd(`                    from_bit x:${x}, v:${v}, n:${n.key}, res:${res}`);
 		return res;
@@ -202,7 +214,10 @@ class bdds_rec extends bdds_base {
 	// if-then-else operator
 	ite(v, t, e) {
 		const x = this.getnode(t); const y = this.getnode(e);
-		if ((bdds.leaf(x)||v<x.v) && (bdds.leaf(y)||v<y.v)) return this.add(new node(v+1, t, e));
+		if ((bdds.leaf(x) || v.lt(x.v))
+		&&  (bdds.leaf(y) || v.lt(y.v))) {
+			return this.add(new node(v.add(int(1)), t, e));
+		}
 		return this.bdd_or(
 				this.bdd_and(this.from_bit(v, true), t),
 				this.bdd_and(this.from_bit(v, false), e));
@@ -245,7 +260,7 @@ class bdds_rec extends bdds_base {
 		const Vy = dst.getnode(y).clone();
 		let v;
 		if ((bdds.leaf(Vx) && !bdds.leaf(Vy))
-		|| (!bdds.leaf(Vy) && (Vx.v > Vy.v))) {
+		|| (!bdds.leaf(Vy) && (Vx.v.gt(Vy.v)))) {
 			v = Vy.v;
 			Vx.hi = x; Vx.lo = x;
 		} else {
@@ -255,7 +270,7 @@ class bdds_rec extends bdds_base {
 				return r;
 			} else {
 				v = Vx.v;
-				if ((v < Vy.v) || bdds.leaf(Vy)) {
+				if ((v.lt(Vy.v)) || bdds.leaf(Vy)) {
 					Vy.hi = y; Vy.lo = y;
 				}
 			}
@@ -301,23 +316,23 @@ class bdds_rec extends bdds_base {
 				break;
 			}
 			if ((bdds.leaf(Vx) && !bdds.leaf(Vy))
-			|| (bdds.leaf(Vy) && (Vx.v > Vy.v))) {
+			|| (bdds.leaf(Vy) && (Vx.v.gt(Vy.v)))) {
 				v = Vy.v;
 				Vx.hi = x;
 				Vx.lo = x;
 			} else {
 				if (bdds.leaf(Vx)) {
-					res = (Vx.hi && Vy.hi) ? bdds.T : bdds.F;
+					res = (Vx.hi.gt(int(0)) && Vy.hi.gt(int(0))) ? bdds.T : bdds.F;
 					break;
 				} else {
 					v = Vx.v;
-					if (v < Vy.v || bdds.leaf(Vy)) {
+					if (v.lt(Vy.v) || bdds.leaf(Vy)) {
 						Vy.hi = y;
 						Vy.lo = y;
 					}
 				}
 			}
-			if (v <= BigInt(sz) && s[v-1n]) {
+			if (v.lte(int(sz)) && s[v.sub(int(1))]) {
 				res = dst.bdd_or(
 					bdds.apply_and_ex(src, Vx.hi, dst, Vy.hi, s, p, sz),
 					bdds.apply_and_ex(src, Vx.lo, dst, Vy.lo, s, p, sz));
@@ -349,7 +364,7 @@ class bdds_rec extends bdds_base {
 		const n = this.getnode(x);
 		const res = bdds.leaf(n)
 			? x
-			: this.ite((n.v <= BigInt(sz)) ? m[n.v-1n] : (n.v-1n),
+			: this.ite(n.v.lt(int(sz)) ? int(m[n.v.sub(int(1))]) : n.v.sub(int(1)),
 					this.permute(n.hi, m, sz),
 					this.permute(n.lo, m, sz));
 		if (options.memoization) this.memo_permute[t] = res;
