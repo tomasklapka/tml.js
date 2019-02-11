@@ -19,10 +19,10 @@ const options = {
 	memoization: true, 	// use memoization
 	recursive: false 		// use non rec algos
 }
-const lp_pfp = require("../src/lp");
-const { dict, lp } = lp_pfp(options);
-const { node, bdds, bdds_base } = require("../src/bdds")(options);
-
+const lp = require("../src/lp")(options);
+const { dict } = lp;
+const bdds = require("../src/bdds")(options);
+const { node, bdds_base } = bdds;
 const assert = require("assert");
 const fixtures = require("./test_fixtures");
 
@@ -372,7 +372,7 @@ describe("lp", function() {
 		const p = new lp();
 		assert.strictEqual(p._id, 1);
 		assert.strictEqual(p.db, bdds_base.F);
-		assert.strictEqual(p.dict instanceof dict, true);
+		assert.strictEqual(p.d instanceof dict, true);
 		assert.deepStrictEqual(p.rules, []);
 	});
 	describe("str_read()", function() {
@@ -388,7 +388,7 @@ describe("lp", function() {
 			s.s = '?'; identifier_expected();
 		});
 		it("should parse symbols", function () {
-			const p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			const p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			s.s = 'a symbol ';
 			assert.strictEqual(p.str_read(s), 'a');
 			assert.strictEqual(s.s, 'symbol ');
@@ -396,7 +396,7 @@ describe("lp", function() {
 			assert.strictEqual(s.s, '');
 		});
 		it("should parse variables", function () {
-			const p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			const p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			s.s = ' ?variable ?x ';
 			assert.strictEqual(p.str_read(s), '?variable');
 			assert.strictEqual(s.s, '?x ');
@@ -406,7 +406,7 @@ describe("lp", function() {
 	});
 	describe("term_read()", function () {
 		it("should throw term expected", function () {
-			let p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			let p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			function term_expected() {
 				assert.throws(() => p.term_read(s), /^Error: Term expected$/);
 			}
@@ -415,7 +415,7 @@ describe("lp", function() {
 			s.s = ':'; term_expected();
 		});
 		it("should throw ',', '.' or ':-' expected", function () {
-			let p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			let p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			function comma_dot_sep_expected() {
 				assert.throws(() => p.term_read(s), /^Error: \',\', \'\.\' or \':-\' expected$/);
 			}
@@ -429,7 +429,7 @@ describe("lp", function() {
 			assert.strictEqual(s.s, '');
 		});
 		it("should parse term", function () {
-			let p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			let p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			s.s = 'symbol.';
 			assert.deepStrictEqual(p.term_read(s), [ 1, 'symbol' ]);
 			assert.strictEqual(s.s, '.');
@@ -492,7 +492,7 @@ describe("lp", function() {
 			assert.strictEqual(s.s, '');
 		});
 		it("should parse rule", function () {
-			let p = new lp(); p.dict = new dict_m_passthrough(); const s = {};
+			let p = new lp(); p.d = new dict_m_passthrough(); const s = {};
 			s.s = 'symbol. e 1 2. ~a ?x ?y.';
 			assert.deepStrictEqual(p.rule_read(s), [ [ 1, 'symbol' ] ]);
 			assert.strictEqual(s.s, ' e 1 2. ~a ?x ?y.');
@@ -572,13 +572,13 @@ describe("lp", function() {
 			const p = new lp();
 			const s = 'symbol. ~symbol. e 1 2. e ?x ?y :- e ?x ?z, e ?z ?y.';
 			p.prog_read(s);
-			assert.strictEqual(p.dict.get('symbol'), 1);
-			assert.strictEqual(p.dict.get('e'), 2);
-			assert.strictEqual(p.dict.get('1'), 3);
-			assert.strictEqual(p.dict.get('2'), 4);
-			assert.strictEqual(p.dict.get('?x'), -1);
-			assert.strictEqual(p.dict.get('?y'), -2);
-			assert.strictEqual(p.dict.get('?z'), -3);
+			assert.strictEqual(p.d.get('symbol'), 1);
+			assert.strictEqual(p.d.get('e'), 2);
+			assert.strictEqual(p.d.get('1'), 3);
+			assert.strictEqual(p.d.get('2'), 4);
+			assert.strictEqual(p.d.get('?x'), -1);
+			assert.strictEqual(p.d.get('?y'), -2);
+			assert.strictEqual(p.d.get('?z'), -3);
 			assert.strictEqual(p.pdbs.length, 77);
 			assert.strictEqual(p.pprog.length, 493);
 			// assert.deepStrictEqual(p.pdbs.M, fixtures.lp1_pdbs_M);

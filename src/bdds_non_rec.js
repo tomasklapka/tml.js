@@ -14,7 +14,8 @@
 
 "use strict";
 
-const { node, bdds_rec } = require('./bdds')();
+const bdds = require('./bdds')({ recursive:false });
+const { bdds_rec, node } = bdds;
 
 // debug functions
 const _dbg_apply = require('debug')('tml:bdd_non_rec::apply');
@@ -77,4 +78,4 @@ class bdds_non_rec extends bdds_rec {
 	}
 }
 
-module.exports = { bdds_non_rec }
+module.exports = bdds_non_rec;

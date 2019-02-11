@@ -16,10 +16,10 @@
 
 // DEFAULT OPTIONS
 const options = {
-	recursive: true, // true to use bdds_non_rec
+	recursive: true, // set to false to use bdds_non_rec
 }
 
-const { lp, string_read_text } = require("./lp")(options);
+const lp = require("./lp")(options);
 
 // loads string from stream
 function load_stream(stream) {
@@ -46,7 +46,7 @@ async function main() {
 	if (s === null) {
 		try {
 			process.stdin.setEncoding('utf8');
-			s = string_read_text(await load_stream(process.stdin));
+			s = lp.string_read_text(await load_stream(process.stdin));
 		} catch (err) {   // stdin read error
 			console.log('Read error:', err);
 			return 4;
@@ -66,13 +66,10 @@ async function main() {
 		console.log('PFP error', err);
 		return 2;
 	}
-	if (!r) {           // unsat
-		console.log('unsat');
-	}
+	console.log(r ? p.toString() : 'unsat');
 	return r ? 0 : 1;
 }
 
 module.exports = {
-	lp, string_read_text,
-	main
+	lp, main
 };

@@ -415,10 +415,15 @@ module.exports = (o = {}) => {
 	options.memoization = o.hasOwnProperty('memoization') ? o.memoization : options.memoization;
 	options.recursive = o.hasOwnProperty('recursive') ? o.recursive : options.recursive;
 	// load rec or non rec version of bdds class
-	bdds = options.recursive ? bdds_rec : require('./bdds_non_rec').bdds_non_rec;
-	return {
-		options, bdds,
-		node, bdds_base, bdds_rec,
-		op, op_exists, op_and, op_and_not, op_or
-	}
+	bdds = options.recursive ? bdds_rec : require('./bdds_non_rec');
+	bdds.node = node;
+	bdds.bdds_rec = bdds_rec;
+	bdds.bdds_base = bdds_base;
+	bdds.op = op;
+	bdds.op_exists = op_exists;
+	bdds.op_and = op_and;
+	bdds.op_and_not = op_and_not;
+	bdds.op_or = op_or;
+	bdds.options = options;
+	return bdds
 }

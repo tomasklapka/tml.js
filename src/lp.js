@@ -269,7 +269,7 @@ class rule {
 class lp {
 	constructor() {
 		this._id = ++_counters.lp;
-		this.dict = new dict(); // holds its own dict so we can determine the universe size
+		this.d = new dict(); // holds its own dict so we can determine the universe size
 		this.pdbs = null;   // db bdd (as db has virtual power)
 		this.pprog = null;  // prog bdd
 		this.db = bdds.F;   // db's bdd root
@@ -284,7 +284,7 @@ class lp {
 		let _dbg_match;
 		let r = null;
 		s.s = s.s.replace(/^\s*(\??[\w|\d]+)\s*/, (_, t) => {
-			r = this.dict.get(t);
+			r = this.d.get(t);
 			_dbg_match = t;
 			return ''; // remove match from input
 		})
@@ -404,7 +404,7 @@ class lp {
 			}
 		}
 
-		this.bits = this.dict.bits;
+		this.bits = this.d.bits;
 		_dbg_parser(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw}`);
 		this.pdbs = new bdds(this.ar * this.bits);
 		this.pprog = new bdds(this.maxw * this.ar * this.bits);
@@ -423,6 +423,8 @@ class lp {
 		_dbg_pfp(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
 		_dbg_pfp(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
 		_dbg_pfp(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
+
+		return r; // return raw rules/facts;
 	}
 	// single pfp step
 	step() {
@@ -459,26 +461,29 @@ class lp {
 			d = this.db;                // get current db root
 			s.push(d);                  // store current db root into steps
 			// show step info
-			this.printdb(`step: ${++t} nodes: ${this.pdbs.length} + ${this.pprog.length}\n`)
+			console.log(`step: ${++t} nodes: ${this.pdbs.length} + ${this.pprog.length}\n`)
 			_dbg_pfp(`____________________STEP_${t}________________________`);
 			_dbg_pfp(`                                                     `);
-			//return; /// only 1 step
+			// return; /// only 1 step
 			this.step();                // do pfp step
 			_dbg_pfp('/STEP');
 			if (s.includes(this.db)) {  // if db root already resulted from previous step
-				this.printdb();           // print db
+				// this.printdb();        // print db
 				return d === this.db;     // return true(sat) or false(unsat)
 			}
 		} while (true);
 	}
 	// prints db (bdd -> tml facts)
 	printdb(os) {
-		out(os, this.pdbs, this.db, this.bits, this.ar, 1, this.dict);
+		console.log(out(os, this.pdbs, this.db, this.bits, this.ar, 1, this.d));
 		if (!os) {
 			const o = { dot: true, svg: false };
-			// bdd_out(this.pdbs, this.dict, o);
-			// bdd_out(this.pprog, this.dict, o);
+			// bdd_out(this.pdbs, this.d, o);
+			// bdd_out(this.pprog, this.d, o);
 		}
+	}
+	toString() {
+		return out('', this.pdbs, this.db, this.bits, this.ar, 1, this.d);
 	}
 }
 // removes comments
@@ -506,16 +511,19 @@ function out(os, b, db, bits, ar, w, d) {
 		}
 		os += `\n`;
 	}
-	console.log(os);
+	return os;
 }
 
 module.exports = (o = {}) => {
 	options.recursive = o.hasOwnProperty('recursive') ? o.recursive : options.recursive;
 	// load rec or non rec version of bdds class
-	bdds = require('./bdds')(options).bdds
-	return {
-		lp, string_read_text,
-		dict, rule_items, rule,
-		options, out
-	}
+	bdds = require('./bdds')(options);
+	lp.bdds = bdds;
+	lp.dict = dict;
+	lp.rule = rule;
+	lp.rule_items = rule_items;
+	lp.options = options
+	lp.string_read_text = string_read_text;
+	lp.out = out;
+	return lp;
 }
