@@ -22,24 +22,13 @@ const options = {
 const lp_pfp = require("../src/lp");
 const { dict, lp } = lp_pfp(options);
 const { node, bdds, bdds_base } = require("../src/bdds")(options);
-const int = require("../src/int")(32);
 
 const assert = require("assert");
 const fixtures = require("./test_fixtures");
 
-// Javascript's JSON impl. doesn't know how to de/serialize BigInts
-const BigInt_JSON_serializer = (key, value) =>
-	(typeof value === 'bigint')
-		? value.toString() + 'n'
-		: value;
-const BigInt_JSON_deserializer = (key, value) =>
-	(typeof value === 'string' && /^\d+n$/.test(value))
-		? BigInt(value.slice(0, -1))
-		: value;
-// clone object through JSON for easy compare
-function clone_with_BigInts(obj) {
-	const json = JSON.stringify(obj, BigInt_JSON_serializer);
-	return JSON.parse(json, BigInt_JSON_deserializer);
+function clone_through_JSON(obj) {
+	const json = JSON.stringify(obj);
+	return JSON.parse(json);
 }
 
 // fixtures
@@ -147,17 +136,17 @@ describe("node", function () {
 });
 describe("bdds_base", function () {
 	it("should have static F = 0 and T = 0 getters", function () {
-		assert.strictEqual(bdds_base.F.eq(int(0)), true);
-		assert.strictEqual(bdds_base.T.eq(int(1)), true);
+		assert.strictEqual(bdds_base.F, 0);
+		assert.strictEqual(bdds_base.T, 1);
 	});
 	it("should correctly be initialized", function () {
 		const b = new bdds_base(0);
-		assert.strictEqual(b.root.eq(int(0)), true);
-		assert.strictEqual(b.maxbdd.eq(int(0)), true);
+		assert.strictEqual(b.root, 0);
+		assert.strictEqual(b.maxbdd, 0);
 		assert.strictEqual(b.dim, 1);
-		assert.strictEqual(b.nvars.eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:0/0'].eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:1/1'].eq(int(1)), true);
+		assert.strictEqual(b.nvars, 0);
+		assert.deepStrictEqual(b.M['0:0/0'], 0);
+		assert.deepStrictEqual(b.M['0:1/1'], 1);
 
 	});
 	it("should have length getter", function () {
@@ -171,20 +160,20 @@ describe("bdds_base", function () {
 	it("setpow() sets new pow", function () {
 		const b = new bdds_base();
 		assert.strictEqual(b.dim, 1);
-		assert.strictEqual(b.root.eq(int(0)), true);
-		assert.strictEqual(b.maxbdd.eq(int(0)), true);
-		b.setpow(int(10), 2, 2);
+		assert.strictEqual(b.root, 0);
+		assert.strictEqual(b.maxbdd, 0);
+		b.setpow(10, 2, 2);
 		assert.strictEqual(b.dim, 2);
-		assert.strictEqual(b.root.eq(int(10)), true);
-		assert.strictEqual(b.maxbdd.eq(int(65536)), true);
-		b.setpow(int(4294967296), 3, 4);
+		assert.strictEqual(b.root, 10);
+		assert.strictEqual(b.maxbdd, 65536);
+		b.setpow(4294967296, 3, 4);
 		assert.strictEqual(b.dim, 3);
-		assert.strictEqual(b.root.eq(int(4294967296)), true);
-		assert.strictEqual(b.maxbdd.eq(int(256)), true);
-		b.setpow(int(0), 1, 8);
-		assert.strictEqual(b.maxbdd.eq(int(16)), true);
-		b.setpow(int(0), 1, 16);
-		assert.strictEqual(b.maxbdd.eq(int(4)), true);
+		assert.strictEqual(b.root, 4294967296);
+		assert.strictEqual(b.maxbdd, 256);
+		b.setpow(0, 1, 8);
+		assert.strictEqual(b.maxbdd, 16);
+		b.setpow(0, 1, 16);
+		assert.strictEqual(b.maxbdd, 4);
 	});
 	it("add_nocheck() should add new node withouth checking", function () {
 		const b = new bdds_base();
@@ -192,27 +181,27 @@ describe("bdds_base", function () {
 		assert.strictEqual(b.length, 3);
 		b.add_nocheck(new node(4294967295, -42, 24));
 		assert.strictEqual(b.length, 4);
-		assert.deepStrictEqual(b.M['0:0/0'].eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:1/1'].eq(int(1)), true);
-		assert.deepStrictEqual(b.M['100:42/24'].eq(int(2)), true);
-		assert.deepStrictEqual(b.M['4294967295:-42/24'].eq(int(3)), true);
+		assert.deepStrictEqual(b.M['0:0/0'], 0);
+		assert.deepStrictEqual(b.M['0:1/1'], 1);
+		assert.deepStrictEqual(b.M['100:42/24'], 2);
+		assert.deepStrictEqual(b.M['4294967295:-42/24'], 3);
 	
 	});
 	it("add() should add new node", function () {
 		const b = new bdds_base(4294967295);
-		assert.strictEqual(b.add(new node(0, 0, 0)).eq(int(0)), true);
-		assert.strictEqual(b.add(new node(0, 1, 1)).eq(int(1)), true);
-		assert.strictEqual(b.add(new node(4, 0, 1)).eq(int(2)), true);
-		assert.strictEqual(b.add(new node(4, 0, 1)).eq(int(2)), true);
-		assert.strictEqual(b.add(new node(5, 1, 0)).eq(int(3)), true);
-		assert.strictEqual(b.add(new node(5, 1, 0)).eq(int(3)), true);
-		assert.strictEqual(b.add(new node(4294967295, 1, 0)).eq(int(4)), true);
+		assert.strictEqual(b.add(new node(0, 0, 0)), 0);
+		assert.strictEqual(b.add(new node(0, 1, 1)), 1);
+		assert.strictEqual(b.add(new node(4, 0, 1)), 2);
+		assert.strictEqual(b.add(new node(4, 0, 1)), 2);
+		assert.strictEqual(b.add(new node(5, 1, 0)), 3);
+		assert.strictEqual(b.add(new node(5, 1, 0)), 3);
+		assert.strictEqual(b.add(new node(4294967295, 1, 0)), 4);
 		assert.strictEqual(b.length, 5);
-		assert.deepStrictEqual(b.M['0:0/0'].eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:1/1'].eq(int(1)), true);
-		assert.deepStrictEqual(b.M['4:0/1'].eq(int(2)), true);
-		assert.deepStrictEqual(b.M['5:1/0'].eq(int(3)), true);
-		assert.deepStrictEqual(b.M['4294967295:1/0'].eq(int(4)), true);
+		assert.deepStrictEqual(b.M['0:0/0'], 0);
+		assert.deepStrictEqual(b.M['0:1/1'], 1);
+		assert.deepStrictEqual(b.M['4:0/1'], 2);
+		assert.deepStrictEqual(b.M['5:1/0'], 3);
+		assert.deepStrictEqual(b.M['4294967295:1/0'], 4);
 
 		assert.throws(() => b.add(new node(4294967296, 1, 0)), /^Error: Node id too big.$/);
 	});
@@ -222,11 +211,11 @@ describe("bdds_base", function () {
 			b.add(new node(4, 0, 1));
 			b.add(new node(5, 1, 0));
 			b.add(new node(4294967295, 1, 0));
-			assert.strictEqual(b.getnode(int(0)).key, '0:0/0');
-			assert.strictEqual(b.getnode(int(1)).key, '0:1/1');
-			assert.strictEqual(b.getnode(int(2)).key, '4:0/1');
-			assert.strictEqual(b.getnode(int(3)).key, '5:1/0');
-			assert.strictEqual(b.getnode(int(4)).key, '4294967295:1/0');
+			assert.strictEqual(b.getnode(0).key, '0:0/0');
+			assert.strictEqual(b.getnode(1).key, '0:1/1');
+			assert.strictEqual(b.getnode(2).key, '4:0/1');
+			assert.strictEqual(b.getnode(3).key, '5:1/0');
+			assert.strictEqual(b.getnode(4).key, '4294967295:1/0');
 		});
 		it("should return node by id (dim>1)");
 	});
@@ -236,8 +225,8 @@ describe("bdds_base", function () {
 			assert.strictEqual(bdds_base.leaf(new node(0, 1, 1)), true);
 		});
 		it("should return true if node (by id) is leaf", function () {
-			assert.strictEqual(bdds_base.leaf(int(0)), true);
-			assert.strictEqual(bdds_base.leaf(int(1)), true);
+			assert.strictEqual(bdds_base.leaf(0), true);
+			assert.strictEqual(bdds_base.leaf(1), true);
 		});
 		it("should return false if node (by id) isn\'t leaf", function () {
 			assert.strictEqual(bdds_base.leaf(new node(1, 0, 0)), false);
@@ -246,10 +235,10 @@ describe("bdds_base", function () {
 			assert.strictEqual(bdds_base.leaf(new node(-4294967295, 0, 0)), false);
 		});
 		it("should return false if node (by id) isn\'t leaf", function () {
-			assert.strictEqual(bdds_base.leaf(int(2)), false);
-			assert.strictEqual(bdds_base.leaf(int(-1)), false);
-			assert.strictEqual(bdds_base.leaf(int(4294967295)), false);
-			assert.strictEqual(bdds_base.leaf(int(-4294967295)), false);
+			assert.strictEqual(bdds_base.leaf(2), false);
+			assert.strictEqual(bdds_base.leaf(-1), false);
+			assert.strictEqual(bdds_base.leaf(4294967295), false);
+			assert.strictEqual(bdds_base.leaf(-4294967295), false);
 		});
 	});
 	describe("trueleaf()", function () {
@@ -258,7 +247,7 @@ describe("bdds_base", function () {
 			assert.strictEqual(bdds_base.trueleaf(new node(0, 4294967295, 0)), true);
 		});
 		it("should return true if node (by id) is true leaf", function () {
-			assert.strictEqual(bdds_base.trueleaf(int(1)), true);
+			assert.strictEqual(bdds_base.trueleaf(1), true);
 		});
 		it("should return false if node (by id) isn\'t true leaf", function () {
 			assert.strictEqual(bdds_base.trueleaf(new node(0, 0, 1)), false);
@@ -267,27 +256,27 @@ describe("bdds_base", function () {
 			assert.strictEqual(bdds_base.trueleaf(new node(-4294967295, 0, 1)), false);
 		});
 		it("should return false if node (by id) isn\'t true leaf", function () {
-			assert.strictEqual(bdds_base.trueleaf(int(0)), false);
-			assert.strictEqual(bdds_base.trueleaf(int(2)), false);
-			assert.strictEqual(bdds_base.trueleaf(int(-1)), false);
-			assert.strictEqual(bdds_base.trueleaf(int(4294967295)), false);
-			assert.strictEqual(bdds_base.trueleaf(int(4294967295)), false);
+			assert.strictEqual(bdds_base.trueleaf(0), false);
+			assert.strictEqual(bdds_base.trueleaf(2), false);
+			assert.strictEqual(bdds_base.trueleaf(-1), false);
+			assert.strictEqual(bdds_base.trueleaf(4294967295), false);
+			assert.strictEqual(bdds_base.trueleaf(4294967295), false);
 		});
 	});
 });
 describe("bdds", function () {
 	it("should have static F = 0 and T = 0 getters", function () {
-		assert.strictEqual(bdds.F.eq(int(0)), true);
-		assert.strictEqual(bdds.T.eq(int(1)), true);
+		assert.strictEqual(bdds.F, 0);
+		assert.strictEqual(bdds.T, 1);
 	});
 	it("should correctly be initialized", function () {
 		const b = new bdds(0);
-		assert.strictEqual(b.root.eq(int(0)), true);
-		assert.strictEqual(b.maxbdd.eq(int(0)), true);
+		assert.strictEqual(b.root, 0);
+		assert.strictEqual(b.maxbdd, 0);
 		assert.strictEqual(b.dim, 1);
-		assert.strictEqual(b.nvars.eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:0/0'].eq(int(0)), true);
-		assert.deepStrictEqual(b.M['0:1/1'].eq(int(1)), true);
+		assert.strictEqual(b.nvars, 0);
+		assert.deepStrictEqual(b.M['0:0/0'], 0);
+		assert.deepStrictEqual(b.M['0:1/1'], 1);
 		if (options.memoization) {
 			const ms = [ 'memo_op', 'memo_and_ex', 'memo_copy', 'memo_permute' ];
 			ms.forEach(function (m) {
@@ -345,16 +334,11 @@ describe("bdds", function () {
 					2));
 			const s = [ true, false, true, false, true ];
 			let act;
-			act = bdds.apply_ex(b, int(0), r, s); assert.strictEqual(act.eq(int(0)), true);
-			act = bdds.apply_ex(b, int(1), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(2), r, s); assert.strictEqual(act.eq(int(2)), true);
-			act = bdds.apply_ex(b, int(3), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(4), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(5), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(6), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(7), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(8), r, s); assert.strictEqual(act.eq(int(1)), true);
-			act = bdds.apply_ex(b, int(9), r, s); assert.strictEqual(act.eq(int(1)), true);
+			act = bdds.apply_ex(b, 0, r, s); assert.strictEqual(act, 0);
+			act = bdds.apply_ex(b, 1, r, s); assert.strictEqual(act, 1);
+			act = bdds.apply_ex(b, 2, r, s); assert.strictEqual(act, 2);
+			act = bdds.apply_ex(b, 3, r, s); assert.strictEqual(act, 1);
+			act = bdds.apply_ex(b, 4, r, s); assert.strictEqual(act, 1);
 		});
 	});
 	describe("sat()", function () {
@@ -367,15 +351,15 @@ describe("bdds", function () {
 	describe("from_bit()", function () {
 		it("adds node with high=true and low=false if value is true", function () {
 			const b = new bdds_m();
-			assert.deepStrictEqual(b.from_bit(int(0), true).key, '1:1/0');
-			assert.deepStrictEqual(b.from_bit(int(1), true).key, '2:1/0');
-			assert.deepStrictEqual(b.from_bit(int(4294967294), true).key, '4294967295:1/0');
+			assert.deepStrictEqual(b.from_bit(0, true).key, '1:1/0');
+			assert.deepStrictEqual(b.from_bit(1, true).key, '2:1/0');
+			assert.deepStrictEqual(b.from_bit(4294967294, true).key, '4294967295:1/0');
 		});
 		it("adds node with high=false and low=true if value is false", function () {
 			const b = new bdds_m();
-			assert.deepStrictEqual(b.from_bit(int(0), false).key, '1:0/1');
-			assert.deepStrictEqual(b.from_bit(int(1), false).key, '2:0/1');
-			assert.deepStrictEqual(b.from_bit(int(4294967294), false).key, '4294967295:0/1');
+			assert.deepStrictEqual(b.from_bit(0, false).key, '1:0/1');
+			assert.deepStrictEqual(b.from_bit(1, false).key, '2:0/1');
+			assert.deepStrictEqual(b.from_bit(4294967294, false).key, '4294967295:0/1');
 		});
 	});
 	it("from_eq");
@@ -387,7 +371,7 @@ describe("lp", function() {
 	it("should initialize correctly", function () {
 		const p = new lp();
 		assert.strictEqual(p._id, 1);
-		assert.strictEqual(p.db.eq(bdds_base.F), true);
+		assert.strictEqual(p.db, bdds_base.F);
 		assert.strictEqual(p.dict instanceof dict, true);
 		assert.deepStrictEqual(p.rules, []);
 	});
@@ -578,7 +562,7 @@ describe("lp", function() {
 			const s = '    ';
 			p.prog_read(s);
 			assert.strictEqual(p.ar, 0);
-			assert.strictEqual(p.db.eq(int(0)), true);
+			assert.strictEqual(p.db, 0);
 			assert.strictEqual(p.maxw, 0);
 			assert.strictEqual(p.bits, 1);
 			assert.strictEqual(p.pdbs.length, 2);
@@ -600,10 +584,10 @@ describe("lp", function() {
 			// assert.deepStrictEqual(p.pdbs.M, fixtures.lp1_pdbs_M);
 			// assert.deepStrictEqual(p.pprog.M, fixtures.lp1_pprog_M);
 			assert.strictEqual(p.ar, 3);
-			assert.strictEqual(p.db.eq(int(76)), true);
+			assert.strictEqual(p.db, 76);
 			assert.strictEqual(p.maxw, 2);
 			assert.strictEqual(p.bits, 3);
-			// const act = clone_with_BigInts(p.rules[0])
+			// const act = clone_through_JSON(p.rules[0])
 			// const exp = fixtures.lp1_rules[0];
 			// assert.deepStrictEqual(act, exp);
 		});

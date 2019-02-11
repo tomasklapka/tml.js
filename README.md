@@ -12,8 +12,6 @@ Use `npm run-script build` to create *dist/tml.js*, *dist/tml.wmap.js* (with sou
 
 For a lib containing debugging output use `npm run-script build_debug` to create *dist/tml.debug.js*, etc.
 
-For a lib without any dependencies (no debug, no bn.js - works only in chrom\[ium|e\]) use `npm run-script build_nolibs` to create *dist/tml.nolibs.js*, etc.
-
 ### Usage:
 
 #### Node.js
@@ -63,7 +61,6 @@ So far the output goes to console.log.
   * **op** - Wrapper class for apply operators.
 
 * **bdds\_non\_rec.js** - BDDs extension with non-recursive algos.
-* **int.js** - wrapper for BigInt/bn.js
 
 #### /test:
 

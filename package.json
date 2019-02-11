@@ -11,22 +11,17 @@
     "start": ".bin/tml.js",
     "test": "node_modules/.bin/mocha test",
     "strip_debug": "scripts/strip_debug",
-    "bundle": "node_modules/.bin/browserify -r bn.js -r ./index.js:tml -d > dist/tml.wmap.js",
-    "bundle_debug": "node_modules/.bin/browserify -r bn.js -r debug -r ./index.debug.js:tml -d > dist/tml.debug.wmap.js",
-    "bundle_nolibs": "node_modules/.bin/browserify --ignore bn.js -r ./index.js:tml -d > dist/tml.nolibs.wmap.js",
+    "bundle": "node_modules/.bin/browserify --ignore debug -r ./index.js:tml -d > dist/tml.wmap.js",
+    "bundle_debug": "node_modules/.bin/browserify -r debug -r ./debug.js:tml -d > dist/tml.debug.wmap.js",
     "exorcist": "cat dist/tml.wmap.js | node_modules/.bin/exorcist dist/tml.js.map.js > dist/tml.js",
     "exorcist_debug": "cat dist/tml.debug.wmap.js | node_modules/.bin/exorcist dist/tml.debug.js.map.js > dist/tml.debug.js",
-    "exorcist_nolibs": "cat dist/tml.nolibs.wmap.js | node_modules/.bin/exorcist dist/tml.nolibs.js.map.js > dist/tml.nolibs.js",
     "minify": "node_modules/.bin/terser dist/tml.js > dist/tml.min.js",
     "minify_debug": "node_modules/.bin/terser dist/tml.debug.js > dist/tml.debug.min.js",
-    "minify_nolibs": "node_modules/.bin/terser dist/tml.nolibs.js > dist/tml.nolibs.min.js",
     "build": "npm run-script strip_debug && mkdir -p dist && npm run-script bundle && npm run-script exorcist && npm run-script minify",
     "build_debug" : "mkdir -p dist && npm run-script bundle_debug && npm run-script exorcist_debug && npm run-script minify_debug",
-    "build_nolibs" : "mkdir -p dist && npm run-script bundle_nolibs && npm run-script exorcist_nolibs && npm run-script minify_nolibs",
-    "build_all": "npm run-script build_nolibs && npm run-script build_debug && npm run-script build"
+    "build_all": "npm run-script build_debug && npm run-script build"
   },
   "dependencies": {
-    "bn.js": "^4.11.8",
     "debug": "^4.1.1"
   },
   "devDependencies": {

@@ -3,6 +3,5 @@
 cd src
 mkdir -p ../build
 for S in *.js; do
-    echo $S;
     cat $S | egrep -v "^\s*(const\s+)?_dbg_" > ../build/$S
 done

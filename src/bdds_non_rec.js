@@ -65,7 +65,7 @@ class bdds_non_rec extends bdds_rec {
 				_dbg_apply('applied child', nn, n.lo, n.key, x, parents);
 				if (parents.length === 0) break;  // we are back at the top -> break inf. loop
 				n = parents.pop();                // go up
-				if (nn.eq(n.lo)) {                // if we operated on low
+				if (nn === n.lo) {                // if we operated on low
 					low = nn; ts = s.HI;            // set new low and go high
 				} else {                          // else we operated on high already
 					high = nn; ts = s.OP;           // set new high and go op

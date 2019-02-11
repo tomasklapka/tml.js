@@ -17,13 +17,10 @@
 // DEFAULT OPTIONS
 const options = {
 	recursive: false, // use rec or non rec algos
-	int_size: 32
 }
 let bdds = null; // bdds class (to be loaded when required)
 // load helper function for exporting bdds to dot, svg and/or png
 // const { bdd_out } = require('./util');
-const int_wrapper = require('./int');
-let int; // int function to be populated when module initiated
 
 // debug functions
 const _dbg_parser  = require('debug')('tml:parser');
@@ -107,9 +104,7 @@ class rule_items {
 	// npad?
 	from_arg(bdd, i, j, k, vij, bits, ar, hvars, m, npad) {
 		// helper fn to count BIT from term, arg and bit
-		const BIT = (term, arg, b) => {
-			return int(term).mul(int(bits)).add(int(b)).mul(int(ar)).add(int(arg));
-		}
+		const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 		let notpad = bdds.T;
 		if (m.hasOwnProperty(vij)) {          // if seen
 			_dbg_rule(`next m[vij]:${vij}:${m[vij]}`);
@@ -202,9 +197,7 @@ class rule {
 			} else { // term
 				_dbg_rule(`         head[${i}] = ${head[i]} (sym)`);
 				for (let b = 0; b != bits; ++b) {
-					const BIT = (term,arg,b) => {
-						return int(term).mul(int(bits)).add(int(b)).mul(int(ar)).add(int(arg));
-					};
+					const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 					const res = bdd.from_bit(BIT(0, i, b), (head[i]&(1<<b)) > 0);
 					const _dbg = this.hsym;
 					this.hsym = bdd.bdd_and(this.hsym, res);
@@ -471,10 +464,9 @@ class lp {
 			//return; /// only 1 step
 			this.step();                // do pfp step
 			_dbg_pfp('/STEP');
-			if (s.find(db=>db.eq(this.db)) != undefined) {
-			//if (s.includes(this.db)) {  // if db root already resulted from previous step
+			if (s.includes(this.db)) {  // if db root already resulted from previous step
 				this.printdb();           // print db
-				return d.eq(this.db);     // return true(sat) or false(unsat)
+				return d === this.db;     // return true(sat) or false(unsat)
 			}
 		} while (true);
 	}
@@ -518,9 +510,6 @@ function out(os, b, db, bits, ar, w, d) {
 
 module.exports = (o = {}) => {
 	options.recursive = o.hasOwnProperty('recursive') ? o.recursive : options.recursive;
-	options.int_size = o.hasOwnProperty('int_size') ? o.int_size : options.int_size;
-	// load int wrapper class depending on the int size
-	int = int_wrapper(options.int_size);
 	// load rec or non rec version of bdds class
 	bdds = require('./bdds')(options).bdds
 	return {

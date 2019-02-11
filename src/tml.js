@@ -17,7 +17,6 @@
 // DEFAULT OPTIONS
 const options = {
 	recursive: false, // true to use bdds_non_rec ?
-	int_size: 32      // > 32 uses BigInt/bn.js
 }
 
 const { lp, string_read_text } = require("./lp")(options);
