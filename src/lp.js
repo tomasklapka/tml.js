@@ -162,11 +162,12 @@ class rule_items {
 			// x = bdds.apply_and(p.pdbs, p.db, p.pprog, this.h);
 			// _dbg_rule(`     x: after 'and' ${x} p.db:${p.db} this.h:${this.h}`);
 			// y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
-			_dbg_rule(`     y: after 'ex' ${y} this.x:`, this.x);
+			_dbg_rule(`     y: after 'and_ex' ${y} this.x:[`, this.x.map(x=>x?'1':'0').join(','), ']');
+			_dbg_rule(`        this.hvars:[`, this.hvars.join(','), ']');
 		}
 		//y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
 		z = p.pprog.permute(y, this.hvars, ((this.w+1)*p.bits+1)*(p.ar+2)); // reorder
-		_dbg_rule(`     z: after permute ${z} this.hvars:[`, this.hvars.join(', '), ']');
+		_dbg_rule(`     z: after permute ${z} this.hvars:[`, this.hvars.join(','), ']');
 		z = p.pprog.bdd_and(z, hsym);
 		_dbg_rule(`     z: ${z}`);
 		p.pdbs.setpow(p.db, 1, p.maxw);
