@@ -292,12 +292,12 @@ beginsWithJ Joe.  # Joe begins with J.
 # Set of relations is called a model, or
 # relational structure.
 #                    _____________
-									# |_beginsWithJ_|
+                  # |_beginsWithJ_|
 beginsWithJ Jane. # |    Jane     |
 beginsWithJ John. # |    John     |
 beginsWithJ Jack. # |____Jack_____|
-									#  _____________
-									# |___uncle_____|
+                  #  _____________
+                  # |___uncle_____|
 uncle Jim Joe.    # |  Jim | Joe  |
 uncle Joe Jill.   # |  Joe | Jill |
 uncle Joe Jack.   # |__Joe_|_Jack_|
@@ -427,13 +427,13 @@ employee John male.
 employee Jane female.
 
 salutation ?Person Madam :-
-		employee ?Person female.
+    employee ?Person female.
 # salutation for any employee female is Madam.
 # TML infers that Suzi's and Jane's salutation
 # is Madam.
 
 salutation ?Person Sir :-
-		employee ?Person male.
+    employee ?Person male.
 # salutation for any employee male is Sir
 # TML infers that John's salutation is Sir.
 
@@ -506,13 +506,13 @@ parent Tom Amy.
 # 'parent of a child is an ancestor of the
 # child':
 ancestor ?anc ?child :-
-		parent ?anc ?child.
+    parent ?anc ?child.
 
 # 'parent of a child, who is an ancestor of
 # its descendant, is an ancestor of the
 # descendant':
 ancestor ?anc ?desc :-
-		parent ?anc ?child, ancestor ?child ?desc.
+    parent ?anc ?child, ancestor ?child ?desc.
 
 # Notice how ancestor relation is used in both
 # head and body. This is causing the recursion.`,
