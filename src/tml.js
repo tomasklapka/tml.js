@@ -16,7 +16,7 @@
 
 // DEFAULT OPTIONS
 const options = {
-	recursive: false, // true to use bdds_non_rec ?
+	recursive: true, // true to use bdds_non_rec
 }
 
 const { lp, string_read_text } = require("./lp")(options);

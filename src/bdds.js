@@ -274,9 +274,9 @@ class bdds_rec extends bdds_base {
 				}
 			}
 		}
-		const r = dst.add(new node(v,
-			bdds.apply(src, xn.hi, dst, yn.hi, op),
-			bdds.apply(src, xn.lo, dst, yn.lo, op)));
+		const first  = bdds.apply(src, xn.hi, dst, yn.hi, op);
+		const second = bdds.apply(src, xn.lo, dst, yn.lo, op);
+		const r = dst.add(new node(v, first, second));
 		_dbg_apply(`apply(${apply_id}) ${r} (${x} ${op._dbg} ${y})${src===dst?' on this':''} (recursive)`);
 		if (options.memoization) src.memo_op[t] = r;
 		return r;
