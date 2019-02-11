@@ -18,7 +18,8 @@
     "minify": "node_modules/.bin/terser dist/tml.js > dist/tml.min.js",
     "minify_debug": "node_modules/.bin/terser dist/tml.debug.js > dist/tml.debug.min.js",
     "build": "npm run-script strip_debug && mkdir -p dist && npm run-script bundle && npm run-script exorcist && npm run-script minify",
-    "build_debug" : "mkdir -p dist && npm run-script bundle_debug && npm run-script exorcist_debug && npm run-script minify_debug",
+    "build_debug": "mkdir -p dist && npm run-script bundle_debug && npm run-script exorcist_debug && npm run-script minify_debug",
+    "build_npm": "npm run-script strip_debug",
     "build_all": "npm run-script build_debug && npm run-script build"
   },
   "dependencies": {

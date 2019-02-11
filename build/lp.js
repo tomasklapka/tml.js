@@ -23,10 +23,6 @@ let bdds = null; // bdds class (to be loaded when required)
 // const { bdd_out } = require('./util');
 
 // debug functions
-const _dbg_parser  = require('debug')('tml:parser');
-const _dbg_dict    = require('debug')('tml:dict');
-const _dbg_pfp     = require('debug')('tml:pfp');
-const _dbg_rule    = require('debug')('tml:pfp:rule');
 // internal counter for lps (lp._id)
 const _counters = { lp: 0 };
 
@@ -58,26 +54,21 @@ class dict {
 	// positive indexes are for symbols and negative indexes are for vars
 	get(s) {
 		if (typeof(s) === 'number') {     // if s is number
-			_dbg_dict(`get(${s}) by id = ${this.syms[s]}`);
 			return this.syms[s];      //     return symbol by index
 		}
 		if (s[0] === '?') {               // if s is variable
 			const p = this.vars.indexOf(s);
 			if (p >= 0) {             //     if variable already in dict
-				_dbg_dict(`get(${s}) variable = -${p}`);
 				return -p;        //        return its index negated
 			}
 			this.vars.push(s);        //     else store the variable in dict
-			_dbg_dict(`get(${s}) variable = -${this.vars.length-1} (created)`);
 			return -(this.vars.length-1); //     and return its index negated
 		}
 		const p = this.syms.indexOf(s);   // if s is symbol
 		if (p >= 0) {                     //     if is symbol in dict
-			_dbg_dict(`get(${s}) symbol = ${p}`);
 			return p;                 //         return its index
 		}
 		this.syms.push(s);                //     else store the symbol in dict
-		_dbg_dict(`get(${s}) symbol = ${this.syms.length-1} (created)`);
 		return this.syms.length-1;        //         and return its index
 	}
 }
@@ -108,7 +99,6 @@ class rule_items {
 		const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 		let notpad = bdds.T;
 		if (m.hasOwnProperty(vij)) {                 // if seen
-			_dbg_rule(`next m[vij]:${vij}:${m[vij]}`);
 			for (let b = 0; b != bits; ++b) {    // for all bits
 				k.k = bdd.bdd_and(k.k,
 					bdd.from_eq(BIT(i, j, b), BIT(m[vij][0], m[vij][1], b)));
@@ -143,19 +133,14 @@ class rule_items {
 	}
 	// get heads
 	get_heads(p, hsym) {
-		_dbg_rule(`get_heads hsym:${hsym}`);
 		let x, y, z;
 		p.pdbs.setpow(p.db, this.w, p.maxw);
 		if (bdds.leaf(p.db)) {
-			_dbg_rule(`get_heads p.db:${p.db} (leaf)`);
 			x = bdds.trueleaf(p.db) ? this.h : bdds.F;
-			_dbg_rule(`     x: ${x} p.db:${p.db} this.h:${this.h}`);
 			// remove nonhead variables
 			y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
-			_dbg_rule(`     y: ${y} p.db:${p.db} this.h:${this.h}`);
 		} else {
 			// rule/db conjunction
-			_dbg_rule(`get_heads p.db:${p.db} this.h:${this.h}`);
 			// optimized apply_and_ex
 			y = bdds.apply_and_ex(p.pdbs, p.db, p.pprog, this.h, this.x,
 				this.hvars, ((this.w+1)*p.bits+1)*(p.ar+2));
@@ -163,14 +148,10 @@ class rule_items {
 			// x = bdds.apply_and(p.pdbs, p.db, p.pprog, this.h);
 			// _dbg_rule(`     x: after 'and' ${x} p.db:${p.db} this.h:${this.h}`);
 			// y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
-			_dbg_rule(`     y: after 'and_ex' ${y} this.x:[`, this.x.map(x=>x?'1':'0').join(','), ']');
-			_dbg_rule(`        this.hvars:[`, this.hvars.join(','), ']');
 		}
 		// reorder
 		z = p.pprog.permute(y, this.hvars, ((this.w+1)*p.bits+1)*(p.ar+2));
-		_dbg_rule(`     z: after permute ${z} this.hvars:[`, this.hvars.join(','), ']');
 		z = p.pprog.bdd_and(z, hsym);
-		_dbg_rule(`     z: ${z}`);
 		p.pdbs.setpow(p.db, 1, p.maxw);
 		return z;
 	}
@@ -180,7 +161,6 @@ class rule_items {
 class rule {
 	// initialize rule
 	constructor(bdd, v, bits, ar) {
-		_dbg_rule(`new rule bits: ${bits}, ar: ${ar}, v:`, v);
 		this.hsym = bdds.T;
 		this.hasnegs = false;
 		this.poss = new rule_items(bits, ar);
@@ -191,19 +171,15 @@ class rule {
 		const head = v[v.length-1];
 		this.neg = head[0] < 0;
 		head.shift();
-		_dbg_rule(`    rule head: [ ${head.join(', ')} ]${this.neg?' neg':''}`);
 		for (let i = 0; i != head.length; ++i) {
 			if (head[i] < 0) { // var
 				hvars[head[i]] = i;
-				_dbg_rule(`         head[${i}] = ${head[i]} (var)`, hvars);
 			} else { // term
-				_dbg_rule(`         head[${i}] = ${head[i]} (sym)`);
 				for (let b = 0; b != bits; ++b) {
 					const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 					const res = bdd.from_bit(BIT(0, i, b), (head[i]&(1<<b))>0);
 					const _dbg = this.hsym;
 					this.hsym = bdd.bdd_and(this.hsym, res);
-					_dbg_rule(`           from_bit(BIT(0,${i},${b}):${BIT(0, i, b)}, ${(head[i]&(1<<b))>0}) = ${res} hsym ${_dbg}->${this.hsym}`);
 				}
 			}
 		}
@@ -240,11 +216,7 @@ class rule {
 			v[i].shift();
 			for (let j = 0;	j != v[i].length; ++j) {
 				const s = (bneg ? this.negs : this.poss);
-				_dbg_rule(`\\from_arg i:${i}, j:${j}, k:${k.k}, vij:${v[i][j]}, bits:${bits}, ar:${ar}, npad:${npad.npad}, hvars:`, hvars);
-				_dbg_rule(`m:`, m, 'v:', v);
 				s.from_arg(bdd, i, j, k, v[i][j], bits, ar, hvars, m, npad);
-				_dbg_rule(`/from_arg i:${i}, j:${j}, k:${k.k}, vij:${v[i][j]}, bits:${bits}, ar:${ar}, npad:${npad.npad}, hvars:`, hvars);
-				_dbg_rule(`m:`, m, 'v:', v);
 			}
 			this.hasnegs = this.hasnegs || bneg;
 			const s = bneg ? this.negs : this.poss;
@@ -288,14 +260,11 @@ class lp {
 		let r = null;
 		s.s = s.s.replace(/^\s*(\??[\w|\d]+)\s*/, (_, t) => {
 			r = this.d.get(t);
-			_dbg_match = t;
 			return '';   // remove match from input
 		})
 		if (!r) {
-			_dbg_parser(`str_read ERR from "${_dbg}..."`);
 			throw new Error(identifier_expected);
 		}
-		_dbg_parser(`str_read "${_dbg_match}" (${r}) from "${_dbg}"`);
 		return r;
 	}
 	// read raw term (no bdd)
@@ -304,7 +273,6 @@ class lp {
 		let r = [];
 		skip_ws(s);
 		if (s.s.length === 0) {
-			_dbg_parser(`term_read [] (empty string)`);
 			return r;
 		}
 		let b;
@@ -322,26 +290,21 @@ class lp {
 			else {
 				if (c === ',') {
 					if (r.length === 1) {
-						_dbg_parser(`term_read ERR from "${_dbg}"`);
 						throw new Error(term_expected);
 					}
 					skip(s, ++i);
-					_dbg_parser(`term_read [ ${r.join(', ')} ] from "${_dbg}"`);
 					return r;
 				}
 				if (c === '.' || c === ':') {
 					if (r.length === 1) {
-						_dbg_parser(`term_read ERR from "${_dbg}"`);
 						throw new Error(term_expected);
 					}
 					skip(s, i);
-					_dbg_parser(`term_read [ ${r.join(', ')} ] from "${_dbg}"`);
 					return r;
 				}
 				r.push(this.str_read(s)); i = 0;
 			}
 		} while (i < s.s.length);
-		_dbg_parser(`term_read ERR from "${_dbg}"`);
 		throw new Error(comma_dot_sep_expected);
 	}
 	// read raw rule (no bdd)
@@ -349,35 +312,29 @@ class lp {
 		const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
 		let t, r = [];
 		if ((t = this.term_read(s)).length === 0) {
-			_dbg_parser(`rule_read [] (empty string)`)
 			return r;
 		}
 		r.push(t);
 		skip_ws(s);
 		if (s.s[0] === '.') { // fact
 			skip(s);
-			_dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${_dbg}"`)
 			return r;
 		}
 		if (s.s.length < 2 || (s.s[0] !== ':' && s.s[1] !== '-')) {
-			_dbg_parser(`rule_read ERR from "${_dbg}"`)
 			throw new Error (sep_expected);
 		}
 		skip(s, 2);
 		do {
 			if ((t = this.term_read(s)).length === 0) {
-				_dbg_parser(`rule_read ERR from "${_dbg}"`)
 				throw new Error(term_expected);
 			}
 			r.splice(r.length-1, 0, t); // make sure head is last
 			skip_ws(s);
 			if (s.s[0] === '.') {
 				skip(s);
-				_dbg_parser(`rule_read [ ${r.map(sub=>`[ ${sub.join(', ')} ]`).join(', ')} ] from "${_dbg}"`)
 				return r;
 			}
 			if (s.s[0] === ':') {
-				_dbg_parser(`rule_read ERR from "${_dbg}"`)
 				throw new Error(unexpected_char);
 			};
 		} while (true);
@@ -408,25 +365,19 @@ class lp {
 		}
 
 		this.bits = this.d.bits;
-		_dbg_parser(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw}`);
 		this.pdbs = new bdds(this.ar * this.bits);
 		this.pprog = new bdds(this.maxw * this.ar * this.bits);
 
 		for (let i = 0; i < r.length; i++) {
 			const x = r[i];
 			if (x.length === 1) {
-				_dbg_parser('prog_read store fact', x);
 				this.db = this.pdbs.bdd_or(this.db,
 					new rule(this.pdbs, x, this.bits, this.ar).poss.h);
 			} else {
-				_dbg_parser('prog_read store rule', x);
 				this.rules.push(new rule(this.pprog, x, this.bits, this.ar));
 			}
 		}
 
-		_dbg_pfp(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_pfp(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_pfp(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
 
 		return r; // return raw rules/facts;
 	}
@@ -445,13 +396,10 @@ class lp {
 			if (r.neg) { del = t; } else { add = t; }
 		}
 		s = dbs.bdd_and_not(add, del);
-		_dbg_pfp('db:', this.db, 'add:', add, 'del:', del, 's:', s);
 		if ((s === bdds.F) && (add !== bdds.F)) {
 			this.db = bdds.F;
-			_dbg_pfp('t db set:', this.db);
 		} else {
 			this.db = dbs.bdd_or(dbs.bdd_and_not(this.db, del), s);
-			_dbg_pfp('f db set:', this.db);
 		}
 		dbs.memos_clear();
 		prog.memos_clear();
@@ -467,10 +415,7 @@ class lp {
 			// show step info
 			console.log(`step: ${++t} nodes: ${this.pdbs.length}` +
 				` + ${this.pprog.length}\n`)
-			_dbg_pfp(`____________________STEP_${t}________________________`);
-			_dbg_pfp(`                                                     `);
 			this.step();         // do pfp step
-			_dbg_pfp('/STEP');
 			// if db root already resulted from previous step
 			if (s.includes(this.db)) {
 				// this.printdb();

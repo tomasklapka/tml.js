@@ -100,7 +100,8 @@
 			<div class="button" id="t6" onclick="test(6)">AND/OR</div>
 			<div class="button" id="t7" onclick="test(7)">RECURSION</div>
 			<div class="button" id="t8" onclick="test(8)">NEGATION</div>
-			<div class="button" id="t9" onclick="test(9)">transitive closure</div>
+			<div class="button" id="t9" onclick="test(9)">transitive
+				closure</div>
 			<div class="button" id="t10" onclick="test(10)">family</div>
 		</div>
 		<div>
@@ -108,30 +109,45 @@
 			<textarea id="logic_program"></textarea>
 		</div>
 		<div class="row">
-			<div id="run_button"  class="button" title="RUN"  onclick="run()" >&#9654;</div>
-			<div id="step_button" class="button" title="STEP" onclick="step()">&#9654;&#9646;</div>
-			<div id="stop_button" class="button disabled-button" title="STOP" onclick="stop()">&#9724;</div>
+			<div id="run_button"  title="RUN"  onclick="run()"
+				class="button">&#9654;</div>
+			<div id="step_button" title="STEP" onclick="step()"
+				class="button">&#9654;&#9646;</div>
+			<div id="stop_button" title="STOP" onclick="stop()"
+				class="button disabled-button" >&#9724;</div>
 		</div>
 		<div class="output">
 			<h2>Output</h2>
 			<textarea id="output"></textarea><br/>
-			<input id="sort-result" type="checkbox" checked="true" /><span class="xx-small"> sort output</span>
-			<input id="show-info"   type="checkbox" checked="true" /><span class="xx-small"> show info</span>
-			<input id="autoscroll"  type="checkbox" /><span class="xx-small"> autoscroll</span>
+			<input id="sort-result" type="checkbox" checked="true" />
+			<span class="xx-small"> sort output</span>
+			<input id="show-info"   type="checkbox" checked="true" />
+			<span class="xx-small"> show info</span>
+			<input id="autoscroll"  type="checkbox" />
+			<span class="xx-small"> autoscroll</span>
 		</div>
 		<div id="status-info">
 			RUNNING: <span id="running_status"></span>
 			STEP: <span id="step_status"></span>
 		</div>
 		<div class="note">
-			For more information about Tauchain and TML see <a href="https://github.com/idni/tau/">Tau's github</a>,
-			<a href="http://idni.org/">http://idni.org/</a> or <a href="https://github.com/idni/tau#tml-tutorial-unfinished-draft">TML Tutorial (Unfinished draft)</a>.<br />
-			<a href="https://gitlab.com/tomasklapka/tml.js">Source</a> of the playground | <span class="copyleft" title="copyleft">&copy;</span>2019 Tomáš Klapka &lt;<a href="mailto:tomas@klapka.cz">tomas@klapka.cz</a>&gt;<br />
+			For more information about Tauchain and TML see
+			<a href="https://github.com/idni/tau/">Tau's github</a>,
+			<a href="http://idni.org/">http://idni.org/</a> or
+			<a href="https://github.com/idni/tau#tml-tutorial-unfinished-draft"
+				>TML Tutorial (Unfinished draft)</a>.
+			<br />
+			<a href="https://gitlab.com/tomasklapka/tml.js">Source</a>
+			of the playground |
+			<span class="copyleft" title="copyleft">&copy;</span>
+			2019 Tomáš Klapka
+			&lt;<a href="mailto:tomas@klapka.cz">tomas@klapka.cz</a>&gt;
+			<br />
 		</div>
 		<script src="../dist/tml.js"></script>
 		<script type="text/javascript">
 			const { lp } = require('tml');
-			const s = { // state
+			const s = {    // running state
 				running: false,
 				result: '' // output of the program
 			}
@@ -148,8 +164,8 @@
 				s.result = '';
 				s.running = true;
 				s.step = 0; // step counter
-				s.d = 0; // current db root
-				s.s = []; // previous steps' db roots
+				s.d = 0;    // current db root
+				s.s = [];   // previous steps' db roots
 				s.p = new lp();
 				try {
 					s.raw = s.p.prog_read(lp.string_read_text(source));
@@ -161,16 +177,22 @@
 				}
 				show_status();
 			}
-			function stop() { s.running = false; show_status(); output_result(s.p.toString()); }
+			function stop() {
+				s.running = false;
+				show_status();
+				output_result(s.p.toString());
+			}
 			function run() { step(0); }
-			function step(n = 1) { // do N steps. default 1. 0 = infinity (ie. run until a fixed point)
+			// Do N steps. default 1. 0 = infinity (ie. run until a fixed point)
+			function step(n = 1) {
 				if (!s.running) {
 					start();
 				}
 				for (let i = 0; n === 0 || i < n; i++) {
-					s.d = s.p.db; // get current db root
-					s.s.push(s.d);  // store current db root into previous steps
-					console.log(`step: ${++s.step} nodes: ${s.p.pdbs.length} + ${s.p.pprog.length}\n`);
+					s.d = s.p.db;  // get current db root
+					s.s.push(s.d); // store current db root into previous steps
+					console.log(`step: ${++s.step} nodes: ${s.p.pdbs.length}` +
+						` + ${s.p.pprog.length}\n`);
 					try {
 						s.p.step(); // do pfp step
 					} catch (err) {
@@ -178,7 +200,8 @@
 						s.result = `PFP error: ${err}`;
 						return false;
 					}
-					if (s.s.includes(s.p.db)) { // FP if db root already resulted in a previous step
+					// FP if db root resulted already from a previous step
+					if (s.s.includes(s.p.db)) {
 						if (s.d === s.p.db) {
 							s.result = s.p.toString(); // sat
 						} else {
@@ -201,7 +224,8 @@
 				result = result.trim();
 				// add info if show-info checked
 				if (document.getElementById('show-info').checked) {
-					result = `# STEP: ${s.step} STATUS: ${s.running?'RUNNING':'STOPPED'}\n\n` + result;
+					result = `# STEP: ${s.step} ` +
+						`STATUS: ${s.running?'RUNNING':'STOPPED'}\n\n` + result;
 				}
 				// update output textarea with new output
 				const output = document.getElementById('output');
@@ -226,29 +250,31 @@
 			let t = 1; // current test program chosen
 			function test(n) {
 				n = n || 0;
-				// read current program from logic program textarea 
+				// read current program from logic program textarea
 				const current = document.getElementById('logic_program').value;
 				let confirmed = true;
 				// ask for confirmation if current program running
 				if (s.running) {
-					confirmed = confirmed && confirm('Program is running. Do you want to stop?')
+					confirmed = confirmed
+						&& confirm('Program is running. Do you want to stop?')
 					stop();
 				}
 				// if there is a custom program, ask for confirmation before discarding
-				if (current && current.length > 0 && !test_programs.includes(current)) {
-					confirmed = confirmed && confirm('Do you want to discard your program?');
+				if (current && current.length > 0
+				&& !test_programs.includes(current)) {
+					confirmed = confirmed
+						&& confirm('Do you want to discard your program?');
 				}
 				if (confirmed) {
 					// populate the logic program
-					const logic_program = document.getElementById('logic_program');
+					const logic_program = document
+						.getElementById('logic_program');
 					logic_program.value = test_programs[n];
 					logic_program.scrollTop = 0; // scroll top
 					// deactivate old button and activate the new one
 					document.getElementById('t'+t).className = 'button';
 					t = n;
 					document.getElementById('t'+t).className = 'active-button';
-					// run tml
-					run();
 				}
 			}
 			const test_programs = [
