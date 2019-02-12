@@ -1,4 +1,7 @@
-Ongoing Javascript rewrite of C++ [TML](https://github.com/IDNI/tau).
+Ongoing Javascript rewrite of [TML](https://github.com/IDNI/tau) from C++.
+
+tml.js is used in the [TML playground](https://tml.klapka.cz).
+
 
 **Nothing here is ready yet.**
 
@@ -25,48 +28,48 @@ Where *./in* is a file containing the TML logic program.
 #### browser
 
 ```html
-<script src="../dist/tml.debug.js"></script>
-<script>
-  const { lp } = require('tml');
-  const p = new lp();
-  p.prog_read("e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.");
-  if (!p.pfp()) { console.log('unsat'); }
+<script src="tml.js"></script>
+<script type="text/javascript">
+	const { lp } = require('tml');
+	const p = new lp();
+	p.prog_read("e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.");
+	if (!p.pfp()) {
+		console.log('unsat');
+	} else {
+		console.log(p.toString());
+	}
 </script>
 ```
-
-So far the output goes to console.log.
-
 
 ### Code structure:
 
 #### /
 
 * **index.js** - Loader of a tml.js with stripped debugging.
-* **index.debug.js** - Loader of a tml.js with debugging.
-* **cli.js** - command line executable
+* **debug.js** - Loader of a tml.js with debugging.
+* **cli.js** - Command line executable.
 
 #### /src
 
 * **tml.js** - Loads source input and runs the pfp logic program.
 * **lp.js** - Logic program. Contains classes:
-  * **dict** - Symbols and variables map to integers (varids).
-  * **rule** - P-DATALOG rule
-  * **rule_items** - Positive/negative items of a rule
+  * **dict** - Symbols and variables map to unique integers (varids).
+  * **rule** - P-DATALOG rule.
+  * **rule_items** - Positive/negative items of a rule.
   * **lp** - Logic program. Parses source into BDDs and into rules and runs PFP steps.
 
 * **bdds.js** - BDD structure and operations, contains classes:
   * **node** - A node in a BDD structure.
   * **bdds_base** - Base class for BDD structures.
   * **bdds_rec** - Class for BDD structure with recursive algos.
-  * **op** - Wrapper class for apply operators.
+  * **op** - Wrapper class for apply operators (op_and, op_and_not, op_or, op_exists).
 
-* **bdds\_non\_rec.js** - BDDs extension with non-recursive algos.
+* **bdds\_non\_rec.js** - bdds extension with non-recursive algos (contains bugs).
 
 #### /test:
 
 * **test.js** - Specs. Run with `mocha` or `npm test`.
 * **test_fixtures.js** - Fixtures and data for test.js tests.
-* **index.html** - Testing page running TML in browser.
 
 ### Debugging:
 
@@ -75,23 +78,24 @@ For debugging in browser load *dist/tml.debug.js* version of lib and use localSt
 
 * Use ',' separated debug workers.
 * '*' works as a wildcard.
-* '-' negates the selection of workers.
+* '-' negates the selection of worker.
 
 ###### Debug workers:
 
-* tml:parser
-* tml:dict
-* tml:pfp
-* tml:pfp:rule
-* tml:bdd
-* tml:bdd:node
-* tml:bdd:leaf
-* tml:bdd:apply
-* tml:bdd\_non\_rec::apply
+* tml:parser - debug from parsing functions *_read and bdd with loaded lp
+* tml:dict - dict get() calls
+* tml:pfp - loop of PFP steps
+* tml:pfp:rule - constructing p-datalog rule, get_heads
+* tml:bdd - bdds creation and operations (but apply*)
+* tml:bdd:apply - bdds apply* methods
+* tml:bdd:node - node creation
+* tml:bdd:leaf - leaf and trueleaf tests
+* tml:bdd:parsed - displays parsed bdds serialized
+* tml:bdd\_non\_rec::apply - non recursive apply* methods
 
 ###### Debug usage example:
 
-Turn on all debug but workers matching tml:bdd\*, also turn on debug for tml:bdd:apply:
+Turn on all workers but workers matching tml:bdd\*, also turn on debug for tml:bdd:apply:
 
 ```
 cat ./in | DEBUG=tml:*,-tml:bdd*,tml:bdd:apply node cli

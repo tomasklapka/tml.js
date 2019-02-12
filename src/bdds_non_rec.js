@@ -18,7 +18,7 @@ const bdds = require('./bdds')({ recursive:false });
 const { bdds_rec, node } = bdds;
 
 // debug functions
-const _dbg_apply = require('debug')('tml:bdd_non_rec::apply');
+const _dbg_apply = require('debug')('tml:bdd_non_rec:apply');
 // JS enum emulated by freezing the object
 const _enum = obj => Object.freeze(obj);
 

@@ -27,6 +27,7 @@ const _dbg_parser  = require('debug')('tml:parser');
 const _dbg_dict    = require('debug')('tml:dict');
 const _dbg_pfp     = require('debug')('tml:pfp');
 const _dbg_rule    = require('debug')('tml:pfp:rule');
+const _dbg_bdd     = require('debug')('tml:bdd:parsed');
 // internal counter for lps (lp._id)
 const _counters = { lp: 0 };
 
@@ -424,9 +425,9 @@ class lp {
 			}
 		}
 
-		_dbg_pfp(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_pfp(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_pfp(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
+		_dbg_bdd(`prog_read pdbs:`, this.pdbs.V.map(n=>`${this.pdbs.M[n.key]}=(${n.key})`).join(', '));
+		_dbg_bdd(`prog_read pprog:`, this.pprog.V.map(n=>`${this.pprog.M[n.key]}=(${n.key})`).join(', '));
+		_dbg_bdd(`prog_read bits:${this.bits} ar:${this.ar} maxw:${this.maxw} db(root):${this.db}`);
 
 		return r; // return raw rules/facts;
 	}
