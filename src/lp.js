@@ -59,8 +59,9 @@ class dict {
 	// positive indexes are for symbols and negative indexes are for vars
 	get(s) {
 		if (typeof(s) === 'number') {     // if s is number
-			_dbg_dict(`get(${s}) by id = ${this.syms[s]}`);
-			return this.syms[s];      //     return symbol by index
+			const r = s >= 0 ? this.syms[s] : this.vars[-s];
+			_dbg_dict(`get(${s}) by id = ${r}`);
+			return r;                 //     return symbol by index
 		}
 		if (s[0] === '?') {               // if s is variable
 			const p = this.vars.indexOf(s);
@@ -414,7 +415,7 @@ class lp {
 		this.pprog = new bdds(this.maxw * this.ar * this.bits);
 
 		for (let i = 0; i < r.length; i++) {
-			const x = r[i];
+			const x = JSON.parse(JSON.stringify(r[i])); // clone through JSON
 			if (x.length === 1) {
 				_dbg_parser('prog_read store fact', x);
 				this.db = this.pdbs.bdd_or(this.db,
