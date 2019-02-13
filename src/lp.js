@@ -144,23 +144,26 @@ class rule_items {
 		}
 	}
 	// get heads
-	get_heads(p, hsym) {
+	get_heads(p, hsym, db) {
 		_dbg_rule(`get_heads hsym:${hsym}`);
 		let x, y, z;
-		p.pdbs.setpow(p.db, this.w, p.maxw);
-		if (bdds.leaf(p.db)) {
-			_dbg_rule(`get_heads p.db:${p.db} (leaf)`);
-			x = bdds.trueleaf(p.db) ? this.h : bdds.F;
-			_dbg_rule(`     x: ${x} p.db:${p.db} this.h:${this.h}`);
+		const n = ((this.w+1)*p.bits+1)*(p.ar+2);
+		p.pdbs.setpow(db, this.w, p.maxw);
+		if (bdds.leaf(db)) {
+			_dbg_rule(`get_heads db:${db} (leaf)`);
+			y = bdds.apply_ex(p.pprog, bdds.trueleaf(db) ? h : bdds.F,
+				p.pprog, this.x);
+			//x = bdds.trueleaf(p.db) ? this.h : bdds.F;
+			//_dbg_rule(`     x: ${x} p.db:${p.db} this.h:${this.h}`);
 			// remove nonhead variables
-			y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
-			_dbg_rule(`     y: ${y} p.db:${p.db} this.h:${this.h}`);
+			//y = bdds.apply_ex(p.pprog, x, p.pprog, this.x);
+			_dbg_rule(`     y: ${y} db:${db} this.h:${this.h}`);
 		} else {
 			// rule/db conjunction
-			_dbg_rule(`get_heads p.db:${p.db} this.h:${this.h}`);
+			_dbg_rule(`get_heads db:${db} this.h:${this.h}`);
 			// optimized apply_and_ex
-			y = bdds.apply_and_ex(p.pdbs, p.db, p.pprog, this.h, this.x,
-				this.hvars, ((this.w+1)*p.bits+1)*(p.ar+2));
+			y = bdds.apply_and_ex(p.pdbs, db, p.pprog, this.h, this.x,
+				this.hvars, n);
 			// not optimized apply_and_ex (does not work)
 			// x = bdds.apply_and(p.pdbs, p.db, p.pprog, this.h);
 			// _dbg_rule(`     x: after 'and' ${x} p.db:${p.db} this.h:${this.h}`);
@@ -169,11 +172,11 @@ class rule_items {
 			_dbg_rule(`        this.hvars:[`, this.hvars.join(','), ']');
 		}
 		// reorder
-		z = p.pprog.permute(y, this.hvars, ((this.w+1)*p.bits+1)*(p.ar+2));
+		z = p.pprog.permute(y, this.hvars, n);
 		_dbg_rule(`     z: after permute ${z} this.hvars:[`, this.hvars.join(','), ']');
 		z = p.pprog.bdd_and(z, hsym);
 		_dbg_rule(`     z: ${z}`);
-		p.pdbs.setpow(p.db, 1, p.maxw);
+		p.pdbs.setpow(db, 1, p.maxw);
 		return z;
 	}
 }
@@ -181,10 +184,11 @@ class rule_items {
 // a P-DATALOG rule in bdd form
 class rule {
 	// initialize rule
-	constructor(bdd, v, bits, ar) {
+	constructor(bdd, v, bits, ar, dsz) {
 		_dbg_rule(`new rule bits: ${bits}, ar: ${ar}, v:`, v);
 		this.hsym = bdds.T;
 		this.hasnegs = false;
+		this.hasposs = false;
 		this.poss = new rule_items(bits, ar);
 		this.negs = new rule_items(bits, ar);
 		// hvars = how to permute body vars to head vars
@@ -194,14 +198,23 @@ class rule {
 		this.neg = head[0] < 0;
 		head.shift();
 		_dbg_rule(`    rule head: [ ${head.join(', ')} ]${this.neg?' neg':''}`);
+		const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 		for (let i = 0; i != head.length; ++i) {
 			if (head[i] < 0) { // var
 				hvars[head[i]] = i;
+				let rng = bdds.F;
+				for (let j = 1; j != dsz; ++j) {
+					let elem = bdds.T;
+					for (let b = 0; b != bits; ++b) {
+						elem = bdd.bdd_and(elem, bdd.from_bit(BIT(0, i, b), j&(1<<b)));
+					}
+					rng = bdd.bdd_or(rng, elem);
+				}
+				this.hsym = bdd.bdd_and(this.hsym, rng);
 				_dbg_rule(`         head[${i}] = ${head[i]} (var)`, hvars);
 			} else { // term
 				_dbg_rule(`         head[${i}] = ${head[i]} (sym)`);
 				for (let b = 0; b != bits; ++b) {
-					const BIT = (term, arg, b) => ar*(term*bits+b)+arg;
 					const res = bdd.from_bit(BIT(0, i, b), (head[i]&(1<<b))>0);
 					const _dbg = this.hsym;
 					this.hsym = bdd.bdd_and(this.hsym, res);
@@ -219,6 +232,7 @@ class rule {
 				this.hasnegs = true;
 				++this.negs.w;
 			} else {
+				this.hasposs = true;
 				++this.poss.w;
 			}
 		}
@@ -229,43 +243,50 @@ class rule {
 		this.negs.x     = Array(nvars).fill(false);
 		this.poss.hvars = Array(pvars);
 		this.negs.hvars = Array(nvars);
-		for (let i = 0; i < pvars; ++i) { this.poss.hvars[i] = i; }
-		for (let i = 0; i < nvars; ++i) { this.negs.hvars[i] = i; }
+		for (let i = 0; i != pvars; ++i) { this.poss.hvars[i] = i; }
+		for (let i = 0; i != nvars; ++i) { this.negs.hvars[i] = i; }
 
 		// load rule's terms and terms' arguments
 		const k = { k: null }; // k & npad are objecs for passing by ref
 		const npad = { npad: bdds.F };
 		let bneg = false;
+		let pp = 0;
+		let pn = 0;
 		for (let i = 0; i != v.length-1; ++i) {
 			k.k = bdds.T;
 			bneg = v[i][0] < 0;
 			v[i].shift();
-			for (let j = 0;	j != v[i].length; ++j) {
+			for (let j = 0; j != v[i].length; ++j) {
 				const s = (bneg ? this.negs : this.poss);
 				_dbg_rule(`\\from_arg i:${i}, j:${j}, k:${k.k}, vij:${v[i][j]}, bits:${bits}, ar:${ar}, npad:${npad.npad}, hvars:`, hvars);
 				_dbg_rule(`m:`, m, 'v:', v);
-				s.from_arg(bdd, i, j, k, v[i][j], bits, ar, hvars, m, npad);
+				s.from_arg(bdd, (bneg?pn:pp), j, k, v[i][j], bits, ar, hvars, m, npad);
 				_dbg_rule(`/from_arg i:${i}, j:${j}, k:${k.k}, vij:${v[i][j]}, bits:${bits}, ar:${ar}, npad:${npad.npad}, hvars:`, hvars);
 				_dbg_rule(`m:`, m, 'v:', v);
 			}
-			this.hasnegs = this.hasnegs || bneg;
-			const s = bneg ? this.negs : this.poss;
-			const h = bdd.bdd_and(k.k, bneg
-				? bdd.bdd_and_not(s.h, k.k)
-				: bdd.bdd_and(s.h, k.k));
-			if (bneg) { this.negs.h = h; } else { this.poss.h = h; }
+			if (bneg) {
+				this.negs.h = bdd.bdd_and(this.negs.h, k.k);
+				++pn;
+			} else {
+				this.poss.h = bdd.bdd_and(this.poss.h, k.k);
+				++pp;
+			}
 		}
 		const s = bneg ? this.negs : this.poss;
 		s.h = bdd.bdd_and_not(s.h, npad.npad);
 	}
 	// get heads
 	get_heads(p) {
-		if (this.hasnegs) {
-			return p.pdbs.bdd_and(
-				this.poss.get_heads(p, this.hsym),
-				this.negs.get_heads(p, this.hsym));
+		const poss = () => this.poss.get_heads(p, this.hsym, p.db);
+		const negs = () => this.negs.get_heads(p, this.hsym, p.ndb);
+		if (this.hasnegs && this.hasposs) {
+			const possv = poss();
+			const negsv = negs();
+			return p.pprog.bdd_and(possv, negsv);
 		}
-		return this.poss.get_heads(p, this.hsym);
+		if (this.hasposs) return poss();
+		if (this.hasnegs) return negs();
+		return bdds.T;
 	}
 }
 
@@ -278,6 +299,7 @@ class lp {
 		this.pdbs = null;    // db bdd (as db has virtual power)
 		this.pprog = null;   // prog bdd
 		this.db = bdds.F;    // db's bdd root
+		this.ndb = bdds.F;	 // negative root
 		this.rules = [];     // p-datalog rules
 		this.ar = 0;         // arity
 		this.maxw = 0;       // number of bodies in db
@@ -419,10 +441,14 @@ class lp {
 			if (x.length === 1) {
 				_dbg_parser('prog_read store fact', x);
 				this.db = this.pdbs.bdd_or(this.db,
-					new rule(this.pdbs, x, this.bits, this.ar).poss.h);
+					new rule(this.pdbs, x, this.bits,
+						this.ar, this.d.nsyms).poss.h);
 			} else {
 				_dbg_parser('prog_read store rule', x);
-				this.rules.push(new rule(this.pprog, x, this.bits, this.ar));
+				this.rules.push(
+					new rule(this.pprog, x, this.bits, this.ar,
+						this.d.nsyms));
+				this.hasnegs = this.hasnegs || this.rules[this.rules.length-1].hasnegs;
 			}
 		}
 
@@ -437,6 +463,7 @@ class lp {
 		let add = bdds.F;
 		let del = bdds.F;
 		let s;
+		if (this.hasnegs) this.ndb = this.pdbs.bdd_and_not(bdds.T, this.db);
 		const dbs = this.pdbs;
 		const prog = this.pprog;
 		for (let i = 0; i < this.rules.length; i++) {

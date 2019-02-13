@@ -185,7 +185,7 @@ describe("bdds_base", function () {
 		assert.deepStrictEqual(b.M['0:1/1'], 1);
 		assert.deepStrictEqual(b.M['100:42/24'], 2);
 		assert.deepStrictEqual(b.M['4294967295:-42/24'], 3);
-	
+
 	});
 	it("add() should add new node", function () {
 		const b = new bdds_base(4294967295);
@@ -580,7 +580,7 @@ describe("lp", function() {
 			assert.strictEqual(p.d.get('?y'), -2);
 			assert.strictEqual(p.d.get('?z'), -3);
 			assert.strictEqual(p.pdbs.length, 77);
-			assert.strictEqual(p.pprog.length, 493);
+			assert.strictEqual(p.pprog.length, 549);
 			// assert.deepStrictEqual(p.pdbs.M, fixtures.lp1_pdbs_M);
 			// assert.deepStrictEqual(p.pprog.M, fixtures.lp1_pprog_M);
 			assert.strictEqual(p.ar, 3);

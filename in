@@ -1,4 +1,5 @@
 #1 2. 3 4. ?x ?y :- ?y ?x.
 #father Tom Amy. parent ?x ?y :- father ?x ?y.
 #e 1 2. e 2 3. e 3 4. e 4 5. e 5 1. e ?x ?y :- e ?x ?z, e ?z ?y.
-1 2. 2 3. ?x ?y :- ?y ?x.
+#1 2. 2 3. ?x ?y :- ?y ?x.
+bird Coco. bird Charlie. wounded Charlie. canFly ?X :- bird ?X, ~ wounded ?X.
