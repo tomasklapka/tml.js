@@ -42,6 +42,7 @@ async function main() {
 	// s = "e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.";
 	// s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
 	// s = "1 2. 2 1. ?x ?y :- ?y ?x.";
+	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
 	// unless s, read source from stdin
 	if (s === null) {
 		try {
@@ -67,6 +68,7 @@ async function main() {
 		return 2;
 	}
 	console.log(r ? p.toString() : 'unsat');
+
 	return r ? 0 : 1;
 }
 

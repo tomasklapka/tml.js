@@ -16,7 +16,7 @@
 
 // OPTIONS:
 const options = {
-	memoization: true, 	// use memoization
+	memoization: true,		// use memoization
 	recursive: false 		// use non rec algos
 }
 const lp = require("../src/lp")(options);
@@ -24,12 +24,11 @@ const { dict } = lp;
 const bdds = require("../src/bdds")(options);
 const { node, bdds_base } = bdds;
 const assert = require("assert");
-const fixtures = require("./test_fixtures");
-
-function clone_through_JSON(obj) {
-	const json = JSON.stringify(obj);
-	return JSON.parse(json);
-}
+//const fixtures = require("./test_fixtures");
+//function clone_through_JSON(obj) {
+//	const json = JSON.stringify(obj);
+//	return JSON.parse(json);
+//}
 
 // fixtures
 const dict_f = function () {
@@ -107,18 +106,18 @@ describe('dict', function() {
 	});
 	it('bits getter should return bit size of a dict = 32 - clz32(number of symbols)', function() {
 		const d = dict_f();
-		assert.strictEqual(d.bits, 3);
+		assert.strictEqual(d.bits, 2);
 		d.get('symbol4');
 		assert.strictEqual(d.bits, 3);
 		d.get('symbol5');
 		assert.strictEqual(d.bits, 3);
-		assert.strictEqual(new dict_m(1).bits, 1);
-		assert.strictEqual(new dict_m(2).bits, 2);
+		assert.strictEqual(new dict_m(1).bits, 0);
+		assert.strictEqual(new dict_m(2).bits, 1);
 		assert.strictEqual(new dict_m(3).bits, 2);
 		assert.strictEqual(new dict_m(7).bits, 3);
-		assert.strictEqual(new dict_m(8).bits, 4);
+		assert.strictEqual(new dict_m(8).bits, 3);
 		assert.strictEqual(new dict_m(15).bits, 4);
-		assert.strictEqual(new dict_m(16).bits, 5);
+		assert.strictEqual(new dict_m(16).bits, 4);
 		assert.strictEqual(new dict_m(4294967295).bits, 32);
 	});
 });
@@ -143,7 +142,8 @@ describe("bdds_base", function () {
 		const b = new bdds_base(0);
 		assert.strictEqual(b.root, 0);
 		assert.strictEqual(b.maxbdd, 0);
-		assert.strictEqual(b.dim, 1);
+		assert.strictEqual(b.pdim, 1);
+		assert.strictEqual(b.ndim, 0);
 		assert.strictEqual(b.nvars, 0);
 		assert.deepStrictEqual(b.M['0:0/0'], 0);
 		assert.deepStrictEqual(b.M['0:1/1'], 1);
@@ -159,21 +159,24 @@ describe("bdds_base", function () {
 	});
 	it("setpow() sets new pow", function () {
 		const b = new bdds_base();
-		assert.strictEqual(b.dim, 1);
+		assert.strictEqual(b.pdim, 1);
+		assert.strictEqual(b.ndim, 0);
 		assert.strictEqual(b.root, 0);
 		assert.strictEqual(b.maxbdd, 0);
 		b.setpow(10, 2, 2);
-		assert.strictEqual(b.dim, 2);
+		assert.strictEqual(b.pdim, 2);
+		assert.strictEqual(b.ndim, 2);
 		assert.strictEqual(b.root, 10);
-		assert.strictEqual(b.maxbdd, 65536);
+		assert.strictEqual(b.maxbdd, 1);
 		b.setpow(4294967296, 3, 4);
-		assert.strictEqual(b.dim, 3);
+		assert.strictEqual(b.pdim, 3);
+		assert.strictEqual(b.ndim, 4);
 		assert.strictEqual(b.root, 4294967296);
-		assert.strictEqual(b.maxbdd, 256);
+		assert.strictEqual(b.maxbdd, 1);
 		b.setpow(0, 1, 8);
-		assert.strictEqual(b.maxbdd, 16);
+		assert.strictEqual(b.maxbdd, 1);
 		b.setpow(0, 1, 16);
-		assert.strictEqual(b.maxbdd, 4);
+		assert.strictEqual(b.maxbdd, 1);
 	});
 	it("add_nocheck() should add new node withouth checking", function () {
 		const b = new bdds_base();
@@ -273,12 +276,13 @@ describe("bdds", function () {
 		const b = new bdds(0);
 		assert.strictEqual(b.root, 0);
 		assert.strictEqual(b.maxbdd, 0);
-		assert.strictEqual(b.dim, 1);
+		assert.strictEqual(b.pdim, 1);
+		assert.strictEqual(b.ndim, 0);
 		assert.strictEqual(b.nvars, 0);
 		assert.deepStrictEqual(b.M['0:0/0'], 0);
 		assert.deepStrictEqual(b.M['0:1/1'], 1);
 		if (options.memoization) {
-			const ms = [ 'memo_op', 'memo_and_ex', 'memo_copy', 'memo_permute' ];
+			const ms = [ 'memo_and', 'memo_and_not', 'memo_or', 'memo_copy' ];
 			ms.forEach(function (m) {
 				assert.deepStrictEqual(b[m], {});
 			});
@@ -302,51 +306,23 @@ describe("bdds", function () {
 	if (options.memoization) {
 		it("memos_clear() should clear memos", function () {
 			const b = new bdds_m();
-			b.memo_op   = { t: 1 }; b.memo_and_ex  = { t: 2 };
-			b.memo_copy = { t: 3 }; b.memo_permute = { t: 4 };
+			b.memo_and = { t: 1 }; b.memo_and_not = { t: 2 };
+			b.memo_or  = { t: 3 }; b.memo_copy    = { t: 4 };
 			b.memos_clear();
-			assert.deepStrictEqual(b.memo_op, {});
-			assert.deepStrictEqual(b.memo_and_ex, {});
+			assert.deepStrictEqual(b.memo_and, {});
+			assert.deepStrictEqual(b.memo_and_not, {});
+			assert.deepStrictEqual(b.memo_or, {});
 			assert.deepStrictEqual(b.memo_copy, {});
-			assert.deepStrictEqual(b.memo_permute, {});
 		});
 	}
 	it("apply_and");
 	it("apply_and_not");
 	it("apply_or");
-	it("apply_and_ex_perm");
-	describe("apply()", function () {
-		it("should apply existential op", function () {
-			const b = new bdds(5);
-			const r = new bdds(4);
-			nn(b,1,
-				nn(b,2,
-					nn(b,3,
-						nn(b,4, 0, 1),
-						1),
-					0),
-				nn(b,2,
-					nn(b,4,
-						0,
-						nn(b,5,
-							1,
-							nn(b,0, 0, 0))),
-					2));
-			const s = [ true, false, true, false, true ];
-			let act;
-			act = bdds.apply_ex(b, 0, r, s); assert.strictEqual(act, 0);
-			act = bdds.apply_ex(b, 1, r, s); assert.strictEqual(act, 1);
-			act = bdds.apply_ex(b, 2, r, s); assert.strictEqual(act, 2);
-			act = bdds.apply_ex(b, 3, r, s); assert.strictEqual(act, 1);
-			act = bdds.apply_ex(b, 4, r, s); assert.strictEqual(act, 1);
-		});
-	});
 	describe("sat()", function () {
 		it("...");
 	});
 	it("allsat()");
 	it("ite()");
-	it("permute()");
 	it("copy()");
 	describe("from_bit()", function () {
 		it("adds node with high=true and low=false if value is true", function () {
@@ -501,25 +477,25 @@ describe("lp", function() {
 			assert.deepStrictEqual(p.rule_read(s), [ [ -1, 'a', '?x', '?y' ] ]);
 			assert.strictEqual(s.s, '');
 			s.s = 'head :- body.';
-			assert.deepStrictEqual(p.rule_read(s), [ [ 1, 'body' ], [ 1, 'head' ] ]);
+			assert.deepStrictEqual(p.rule_read(s), [ [ 1, 'head' ], [ 1, 'body' ] ]);
 			assert.strictEqual(s.s, '');
 			s.s = 'head :- term1, term2, term3.';
 			assert.deepStrictEqual(p.rule_read(s), [
-				[ 1, 'term1' ], [ 1, 'term2'], [ 1, 'term3' ], [ 1, 'head' ] ]);
+				[ 1, 'head' ], [ 1, 'term1' ], [ 1, 'term2'], [ 1, 'term3' ] ]);
 			assert.strictEqual(s.s, '');
 			s.s = 'e ?x ?y :- e ?x ?z, e ?z ?y.';
 			assert.deepStrictEqual(p.rule_read(s), [
-				[ 1, 'e', '?x', '?z' ], [ 1, 'e', '?z', '?y'], [ 1, 'e', '?x', '?y' ] ]);
+				[ 1, 'e', '?x', '?y' ], [ 1, 'e', '?x', '?z' ], [ 1, 'e', '?z', '?y'] ]);
 			assert.strictEqual(s.s, '');
 		});
 		it("should parse rule (dict unmocked)", function () {
 			let p = new lp(); const s = {};
 			s.s = 'e ?x ?y :- e ?x ?z, e ?z ?y. a ?x :- b ?x.';
 			assert.deepStrictEqual(p.rule_read(s), [
-				[ 1, 1, -1, -3 ], [ 1, 1, -3, -2 ], [ 1, 1, -1, -2 ] ]);
+				[ 1, 1, -1, -2 ], [ 1, 1, -1, -3 ], [ 1, 1, -3, -2 ] ]);
 			assert.strictEqual(s.s, ' a ?x :- b ?x.');
 			assert.deepStrictEqual(p.rule_read(s), [
-				[ 1, 3, -1 ], [ 1, 2, -1, ] ]);
+				[ 1, 2, -1, ], [ 1, 3, -1 ] ]);
 			assert.strictEqual(s.s, '');
 		});
 	});
@@ -564,9 +540,9 @@ describe("lp", function() {
 			assert.strictEqual(p.ar, 0);
 			assert.strictEqual(p.db, 0);
 			assert.strictEqual(p.maxw, 0);
-			assert.strictEqual(p.bits, 1);
-			assert.strictEqual(p.pdbs.length, 2);
-			assert.strictEqual(p.pprog.length, 2);
+			assert.strictEqual(p.bits, 0);
+			assert.strictEqual(p.dbs.length, 2);
+			assert.strictEqual(p.prog.length, 2);
 		});
 		it("should parse program", function () {
 			const p = new lp();
@@ -579,12 +555,12 @@ describe("lp", function() {
 			assert.strictEqual(p.d.get('?x'), -1);
 			assert.strictEqual(p.d.get('?y'), -2);
 			assert.strictEqual(p.d.get('?z'), -3);
-			assert.strictEqual(p.pdbs.length, 77);
-			assert.strictEqual(p.pprog.length, 549);
+			assert.strictEqual(p.dbs.length, 82);
+			assert.strictEqual(p.prog.length, 832);
 			// assert.deepStrictEqual(p.pdbs.M, fixtures.lp1_pdbs_M);
 			// assert.deepStrictEqual(p.pprog.M, fixtures.lp1_pprog_M);
 			assert.strictEqual(p.ar, 3);
-			assert.strictEqual(p.db, 76);
+			assert.strictEqual(p.db, 81);
 			assert.strictEqual(p.maxw, 2);
 			assert.strictEqual(p.bits, 3);
 			// const act = clone_through_JSON(p.rules[0])
