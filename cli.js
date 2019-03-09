@@ -2,4 +2,4 @@
 
 "use strict";
 
-require('./src/tml.js').main();
+require('./src/driver.js').main();
