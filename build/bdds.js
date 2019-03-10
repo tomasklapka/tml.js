@@ -184,7 +184,7 @@ class bdds {
 		}
 		let n = this.getnode(x);
 		if (bdds.leaf(n)) return x;
-		if (b[n.v-1] === true || b[n.v-1] > 0) {
+		while (b[n.v-1] === true || b[n.v-1] > 0) {
 			x = this.or(n.hi, n.lo);
 			if (bdds.leaf(x)) { return apply_ret(x, this.memo_ex); }
 			n = this.getnode(x);
