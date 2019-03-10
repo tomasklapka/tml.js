@@ -56,6 +56,8 @@ class bdds {
 	// F=0 and T=1 consants
 	static get F() { return 0; }
 	static get T() { return 1; }
+	// length getter
+	get length() { return this.V.length; }
 	// initialize bdds
 	constructor() {
 		this._id = ++_counters.bdds;

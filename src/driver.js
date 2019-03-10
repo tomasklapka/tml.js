@@ -299,4 +299,4 @@ async function main() {
 	return 0;
 }
 
-module.exports = { driver, string_read_text, load_stream, main };
+module.exports = { driver, string_read_text, load_stream, main, dict, lp };
