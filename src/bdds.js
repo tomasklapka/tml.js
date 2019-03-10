@@ -142,6 +142,7 @@ class bdds {
 	or(x, y) {
 		const or_id = ++_counters.or;
 		_dbg_or(`or_id++ = ${or_id} (${x} or ${y})`);
+		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -219,6 +220,7 @@ class bdds {
 	and(x, y) {
 		const and_id = ++_counters.and;
 		_dbg_and(`and_id++ = ${and_id} (${x} and ${y})`);
+		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -300,6 +302,7 @@ class bdds {
 	and_deltail(x, y, h) {
 		const and_deltail_id = ++_counters.and_deltail;
 		_dbg_and_deltail(`and_deltail_id++ = ${and_deltail_id} (${x} and_deltail ${y}, ${h})`);
+		if (x === y) return this.deltail(x, h);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -351,6 +354,7 @@ class bdds {
 	and_ex(x, y, s) {
 		const and_ex_id = ++_counters.and_ex;
 		_dbg_and_ex(`and_ex_id++ = ${and_ex_id} (${x} and_ex ${y}, ${s.join(',')})`);
+		if (x === y) return this.ex(x, s);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -409,6 +413,7 @@ class bdds {
 	and_not(x, y) {
 		const and_not_id = ++_counters.and_not;
 		_dbg_and_not(`and_not_id++ = ${and_not_id} (${x} and_not ${y})`);
+		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -459,6 +464,7 @@ class bdds {
 	and_not_ex(x, y, s) {
 		const and_not_ex_id = ++_counters.and_not_ex;
 		_dbg_and_not_ex(`and_not_ex_id++ = ${and_not_ex_id} (${x} and_not_ex ${y}, ${s.join(',')})`);
+		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {

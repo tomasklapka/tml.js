@@ -125,6 +125,7 @@ class bdds {
 
 	or(x, y) {
 		const or_id = ++_counters.or;
+		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -194,6 +195,7 @@ class bdds {
 
 	and(x, y) {
 		const and_id = ++_counters.and;
+		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -264,6 +266,7 @@ class bdds {
 
 	and_deltail(x, y, h) {
 		const and_deltail_id = ++_counters.and_deltail;
+		if (x === y) return this.deltail(x, h);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -309,6 +312,7 @@ class bdds {
 
 	and_ex(x, y, s) {
 		const and_ex_id = ++_counters.and_ex;
+		if (x === y) return this.ex(x, s);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -361,6 +365,7 @@ class bdds {
 
 	and_not(x, y) {
 		const and_not_id = ++_counters.and_not;
+		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -405,6 +410,7 @@ class bdds {
 
 	and_not_ex(x, y, s) {
 		const and_not_ex_id = ++_counters.and_not_ex;
+		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {

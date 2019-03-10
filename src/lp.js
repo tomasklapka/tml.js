@@ -47,20 +47,14 @@ class rule {
 		this.bdds = bdb;
 		this.neg  = false;
 		this.hsym = bdds.T;
-		this.npos = 0;
-		this.nneg = 0;
 		this.sels = [];
 		this.bd = [];
 		const ar = v[0].length - 1;
-		const t = [ v[0].slice() ];
-		for (let i = 1; i != v.length; ++i) { if (v[i][0] > 0) { ++this.npos; t.push(v[i].slice()); } }
-		for (let i = 1; i != v.length; ++i) { if (v[i][0] < 0) { ++this.nneg; t.push(v[i].slice()); } }
-		v = t;
 		this.neg = v[0][0] < 0;
+		v[0] = v[0].slice(1);
 		const vars = [];
 		for (let i = 0; i != v.length; ++i) {
 			const x = v[i];
-			x.shift();
 			for (let j = 0; j != x.length; ++j) {
 				const y = x[j];
 				if (y < 0 && !vars.includes(y)) {
@@ -72,10 +66,12 @@ class rule {
 		let m = {};
 		for (let i = 1; i != v.length; ++i) {
 			const d = {
+				neg: v[i][0] < 0,
 				sel: bdds.T,
 				perm: [],
 				ex: []
 			};
+			v[i].shift();
 			d.ex = new Array(bits*ar).fill(0);
 			d.perm = new Array((ar + nvars) * bits);
 			for (let b = 0; b != (ar + nvars) * bits; ++b) {
@@ -133,23 +129,20 @@ class rule {
 		}
 	}
 
-	step(db, bits, ar) {
-		let n = 0;
-		for (; n != this.npos; ++n) {
-			this.sels[n] = this.bdds.and_ex(this.bd[n].sel, db, this.bd[n].ex);
-			if (bdds.F === this.sels[n]) return bdds.F;
-		}
-		for (; n != this.nneg+this.npos; ++n) {
-			this.sels[n] = this.bdds.and_not_ex(this.bd[n].sel, db, this.bd[n].ex);
-			if (bdds.F === this.sels[n]) return bdds.F;
-		}
+	fwd(db, bits, ar) {
+		const varbdd = (b, db) => {
+			const t = b.neg
+				? this.bdds.and_not_ex(b.sel, db, b.ex)
+				: this.bdds.and_ex(b.sel, db, b.ex);
+			return this.bdds.permute(t, b.perm);
+		};
 		let vars = bdds.T;
-		for (n = 0; n != this.bd.length; ++n) {
-			const p = this.bdds.permute(this.sels[n], this.bd[n].perm);
-			vars = this.bdds.and(vars, p);
+		for (let i = 0; i < this.bd.length; i++) {
+			const b = this.bd[i];
+			vars = this.bdds.and(vars, varbdd(b, db));
 			if (bdds.F === vars) return bdds.F;
 		}
-		return this.bdds.and_deltail(this.hsym, vars, bits*ar);
+		return this.bdds.and_deltail(this.hsym, vars, bits * ar);
 	}
 }
 
@@ -183,7 +176,7 @@ class lp {
 		let del = bdds.F;
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
-			const t = this.bdds.or(r.step(this.db, this.bits, this.ar), r.neg ? del : add);
+			const t = this.bdds.or(r.fwd(this.db, this.bits, this.ar), r.neg ? del : add);
 			if (r.neg) { del = t; } else { add = t; }
 		}
 		let s = this.bdds.and_not(add, del);
