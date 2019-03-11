@@ -16,9 +16,11 @@
 
 const lp = require("./lp")();
 
+// debug functions
 const _dbg_parser  = require('debug')('tml:parser');
 const _dbg_dict    = require('debug')('tml:dict');
 const _dbg_bdd     = require('debug')('tml:bdd:parsed');
+const _dbg_pfp     = require('debug')('tml:pfp');
 
 // messages
 const identifier_expected     = `Identifier expected`;
@@ -79,12 +81,10 @@ class driver {
 		this.p = null;
 	}
 	get db() { return this.p.getdb(); }
-	printdb(os) {
-		os = os || '';
-		const vs = this.db;
+	printdb(os = '', t = this.db) {
 		const s = [];
-		for (let i = 0; i < vs.length; i++) {
-			const v = vs[i];
+		for (let i = 0; i < t.length; i++) {
+			const v = t[i];
 			let ss = '';
 			for (let j = 0; j < v.length; j++) {
 				const k = v[j];
@@ -98,10 +98,31 @@ class driver {
 		return os;
 	}
 	toString() { return this.printdb(); }
+
+	// pfp logic
 	pfp() {
-		const r = this.p.pfp();
-		console.log(this.printdb());
-		return r;
+		let d;                       // current db root
+		let t = 0;                   // step counter
+		const s = [];                // db roots of previous steps
+		do {
+			d = this.p.db;       // get current db root
+			s.push(d);           // store current db root into steps
+			_dbg_pfp(`____________________STEP_${++t}________________________`);
+			_dbg_pfp(`                                                     `);
+			this.p.fwd();         // do pfp step
+			_dbg_pfp(`___________________/STEP_${t}________________________`);
+			// if db root already resulted from previous step
+			if (s.includes(this.p.db)) {
+				if (d === this.p.db) {
+					console.log(this.printdb());
+					return true;
+				} else {
+					return false;
+				}
+			} else {
+				this.printdb();
+			}
+		} while (true);
 	}
 	// parse a string and returns its dict id
 	str_read(s) {

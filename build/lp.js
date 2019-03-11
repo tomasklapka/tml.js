@@ -69,7 +69,7 @@ class rule {
 				ex: []
 			};
 			v[i].shift();
-			d.ex = new Array(bits*ar).fill(0);
+			d.ex = new Array(bits*ar).fill(false);
 			d.perm = new Array((ar + nvars) * bits);
 			for (let b = 0; b != (ar + nvars) * bits; ++b) {
 				d.perm[b] = b;
@@ -126,20 +126,43 @@ class rule {
 		}
 	}
 
-	fwd(db, bits, ar) {
-		const varbdd = (b, db) => {
-			const t = b.neg
+	fwd(db, bits, ar, s) {
+		const varbdd = (b, db, s) => {
+			const sb = b.neg ? s.neg : s.pos;
+			const key = b.sel+'.'+b.ex.join(',');
+			if (sb.hasOwnProperty(key)) {
+				return this.bdds.permute(sb[key], b.perm);
+			}
+			const r = b.neg
 				? this.bdds.and_not_ex(b.sel, db, b.ex)
 				: this.bdds.and_ex(b.sel, db, b.ex);
-			return this.bdds.permute(t, b.perm);
+			sb[key] = r;
+			return this.bdds.permute(r, b.perm);
 		};
+
+		if (this.bd.length === 1) {
+			return this.bdds.deltail(
+				this.bdds.and(this.hsym, varbdd(this.bd[0], db, s)),
+				bits * ar);
+		}
+		if (this.bd.length == 2) {
+			return this.bdds.deltail(
+				this.bdds.and(this.hsym, this.bdds.and(
+					varbdd(this.bd[0], db, s),
+					varbdd(this.bd[1], db, s)
+				),
+				bits * ar));
+		}
 		let vars = bdds.T;
+		const v = [];
 		for (let i = 0; i < this.bd.length; i++) {
 			const b = this.bd[i];
-			vars = this.bdds.and(vars, varbdd(b, db));
+			vars = this.bdds.and(vars, varbdd(b, db, s));
 			if (bdds.F === vars) return bdds.F;
+			v.push(vars);
 		}
-		return this.bdds.and_deltail(this.hsym, vars, bits * ar);
+		v.push(this.hsym);
+		return this.bdds.and_deltail(this.bdds.and_many(v), bits * ar);
 	}
 }
 
@@ -154,8 +177,10 @@ class lp {
 		this.ar = arity;
 		this.dsz = dsz;
 		this.bits = maxbits;
+		this.p = { pos: {}, neg: {} };
 	}
-	getdb() { return this.from_bits(this.db); }
+	getbdd(t) { return this.from_bits(t)}
+	getdb() { return this.getbdd(this.db); }
 	// single pfp step
 	rule_add(x) {
 		const r = new rule(this.bdds, x, this.bits, this.dsz);
@@ -165,12 +190,15 @@ class lp {
 			this.rules.push(r);
 		}
 	}
-	step() {
+	fwd() {
 		let add = bdds.F;
 		let del = bdds.F;
+		this.p.pos = {}; this.p.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
-			const t = this.bdds.or(r.fwd(this.db, this.bits, this.ar), r.neg ? del : add);
+			const t = this.bdds.or(
+				r.fwd(this.db, this.bits, this.ar, this.p),
+				r.neg ? del : add);
 			if (r.neg) { del = t; } else { add = t; }
 		}
 		let s = this.bdds.and_not(add, del);
@@ -179,21 +207,6 @@ class lp {
 		} else {
 			this.db = this.bdds.or(this.bdds.and_not(this.db, del), s);
 		}
-	}
-	// pfp logic
-	pfp() {
-		let d;                       // current db root
-		let t = 0;                   // step counter
-		const s = [];                // db roots of previous steps
-		do {
-			d = this.db;         // get current db root
-			s.push(d);           // store current db root into steps
-			this.step();         // do pfp step
-			// if db root already resulted from previous step
-			if (s.includes(this.db)) {
-				return d === this.db;
-			}
-		} while (true);
 	}
 
 	from_bits(x) {

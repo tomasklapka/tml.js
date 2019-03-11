@@ -28,13 +28,14 @@ const _dbg_ex          = require('debug')('tml:bdd:apply:ex');
 const _dbg_and         = require('debug')('tml:bdd:apply:and');
 const _dbg_deltail     = require('debug')('tml:bdd:apply:deltail');
 const _dbg_and_deltail = require('debug')('tml:bdd:apply:and_deltail');
+const _dbg_and_many    = require('debug')('tml:bdd:apply:and_many');
 const _dbg_and_ex      = require('debug')('tml:bdd:apply:and_ex');
 const _dbg_and_not     = require('debug')('tml:bdd:apply:and_not');
 const _dbg_and_not_ex  = require('debug')('tml:bdd:apply:and_not_ex');
 const _dbg_permute     = require('debug')('tml:bdd:apply:permute');
 
 // internal counters for apply calls
-const _counters = { apply: 0, or: 0, ex: 0, and: 0, deltail: 0,
+const _counters = { apply: 0, or: 0, ex: 0, and: 0, deltail: 0, and_many: 0,
 	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0 };
 
 // node in a bdd tree
@@ -351,6 +352,58 @@ class bdds {
 		const r = this.deltail(this.add(new node(v, hi, lo)), h);
 		_dbg_and_deltail(`and_deltail(${and_deltail_id}) ${r} (${x} and_deltail5 ${y}, ${h})`);
 		return apply_ret(r, this.memo_and_deltail);
+	}
+
+	and_many(v) {
+		const id = ++_counters.and_many;
+		_dbg_and_many(`and_many_id++ = ${id} (v:${v.join(',')})`);
+		let from = 0;
+		if (1 === (v.length - from)) {
+			return v[from];
+		}
+		while (bdds.leaf(v[from])) {
+			if (!bdds.trueleaf(v[from])) {
+				return bdds.F;
+			} else {
+				if (1 === (v.length - ++from)) {
+					return v[from];
+				}
+			}
+		}
+		let t = v[from];
+		let m = this.getnode(t).v;
+		let b = false;
+		let eq = true;
+		for (let i = from + 1; i != v.length; ++i) {
+			if (bdds.leaf(v[i])) {
+				if (!bdds.trueleaf(v[i])) return bdds.F;
+				continue;
+			}
+			const n = this.getnode(v[i]);
+			b |= n.v != m;
+			eq &= t === v[i];
+			if (n.v < m) m = n.v;
+		}
+		if (eq) return t;
+		const v1 = Array(v.length - from);
+		const v2 = Array(v.length - from);
+		for (i = from; i != v.length; ++i) {
+			if (!b || this.getnode(v[i]).v === m) {
+				v1.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).hi);
+			} else {
+				v1.push(v[i]);
+			}
+		}
+		for (i = from; i != v.length; ++i) {
+			if (!b || this.getnode(v[i]).v === m) {
+				v2.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).lo);
+			} else {
+				v2.push(v[i]);
+			}
+		}
+		const hi = this.and_many(v1);
+		const lo = this.and_many(v2);
+		return this.add(new node(m, hi, lo));
 	}
 
 	and_ex(x, y, s) {
