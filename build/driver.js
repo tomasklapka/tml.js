@@ -14,7 +14,7 @@
 
 "use strict";
 
-const lp = require("./lp")();
+const { lp } = require("./lp");
 
 // debug functions
 
@@ -24,6 +24,9 @@ const term_expected           = `Term expected`;
 const comma_dot_sep_expected  = `',', '.' or ':-' expected`;
 const sep_expected            = `Term or ':-' or '.' expected`;
 const unexpected_char         = `Unexpected char`;
+const rbrace_unexpected       = `Unexpected '}'`;
+const lbrace_unexpected       = `Unexpected '{'`;
+const rbrace_expected         = `Expected '}'`;
 
 // skip_ws or skip 1 or more characters from parsing input
 const skip_ws = s           => { s.s = s.s.replace(/^\s+/, ''); };
@@ -69,10 +72,13 @@ class dict {
 class driver {
 	constructor() {
 		this.d = new dict();
-		this.p = null;
+		this.mult = false;
+		this.progs = [];
 	}
-	get db() { return this.p.getdb(); }
-	printdb(os = '', t = this.db) {
+	printbdd(os = '', t) {
+		if (!Array.isArray(t)) {
+			t = this.progs[this.progs.length-1].getbdd(t);
+		}
 		const s = [];
 		for (let i = 0; i < t.length; i++) {
 			const v = t[i];
@@ -88,27 +94,33 @@ class driver {
 		os += s.sort().join(`\n`);
 		return os;
 	}
+	printdb(os) {
+		return this.printbdd(os, this.progs[this.progs.length-1].getdb())
+	}
 	toString() { return this.printdb(); }
 
 	// pfp logic
-	pfp() {
+	pfp(p) {
+		if (!p) {
+			let r = this.pfp(this.progs[0]);
+			for (let n = 1; n != this.progs.length; ++n) {
+				this.progs[n].db = this.progs[n-1].db;
+				r = this.pfp(this.progs[n]);
+				if (!r) return false;
+			}
+			console.log(this.printdb());
+			return r;
+		}
 		let d;                       // current db root
 		let t = 0;                   // step counter
 		const s = [];                // db roots of previous steps
 		do {
-			d = this.p.db;       // get current db root
+			d = p.db;       // get current db root
 			s.push(d);           // store current db root into steps
-			this.p.fwd();         // do pfp step
+			p.fwd();         // do pfp step
 			// if db root already resulted from previous step
-			if (s.includes(this.p.db)) {
-				if (d === this.p.db) {
-					console.log(this.printdb());
-					return true;
-				} else {
-					return false;
-				}
-			} else {
-				this.printdb();
+			if (s.includes(p.db)) {
+				return d === p.db;
 			}
 		} while (true);
 	}
@@ -199,8 +211,7 @@ class driver {
 		} while (true);
 	}
 	// parses prog
-	prog_read(prog) {
-		const s   = { s: prog }; // source into string to parse
+	prog_read(s) {
 		let ar    = 0;           // arity
 		let l, r  = [];          // length and rules
 
@@ -209,8 +220,15 @@ class driver {
 			for (let x = t[0]; i < t.length; x = t[++i]) {
 				ar = Math.max(ar, x.length - 1);
 			}
+			skip_ws(s);
+			if (s.s[0] === '}') {
+				if (!this.mult) { throw new Error(rbrace_unexpected); }
+				r.push(t);
+				break;
+			}
+			if (s.s[0] === '{') { throw new Error(lbrace_unexpected); }
 		}
-		this.p = new lp(this.d.bits, ar, this.d.nsyms);
+		const p = new lp(this.d.bits, ar, this.d.nsyms);
 		for (let i = r.length-1; i >= 0; i--) {
 			for (let j = 0; j < r[i].length; j++) {
 				l = r[i][j].length;
@@ -218,12 +236,34 @@ class driver {
 					r[i][j] = r[i][j].concat(Array(ar + 1 - l).fill(dict.pad));
 				}
 			}
-			this.p.rule_add(r[i]);
+			p.rule_add(r[i]);
 		}
-		return r; // return raw rules/facts;
+		return p;
+	}
+	progs_read(prog) {
+		const s = { s: prog };
+		skip_ws(s);
+		this.mult = (s.s[0] === '{');
+		if (!this.mult) {
+			this.progs.push(this.prog_read(s));
+			return;
+		}
+		while (s.s.length > 0) {
+			skip_ws(s);
+			if (s.s[0] === '{') {
+				skip(s);
+				this.progs.push(this.prog_read(s));
+			}
+			skip_ws(s);
+			if (s.s[0] !== '}') {
+				throw new Error(rbrace_expected);
+			} else {
+				skip(s);
+			}
+			skip_ws(s);
+		}
 	}
 }
-
 // removes comments
 function string_read_text(data) {
 	let s = '', skip = false;
@@ -270,7 +310,7 @@ async function main() {
 	}
 	const d = new driver();
 	try {
-		d.prog_read(s); // parse source from s
+		d.progs_read(s); // parse source from s
 	} catch (err) {
 		console.log('Parse error:', err);
 		return 3;

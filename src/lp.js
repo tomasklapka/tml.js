@@ -18,10 +18,13 @@ const { bdds } = require('./bdds')();
 
 // debug functions
 const _dbg_pfp     = require('debug')('tml:pfp');
+const _dbg_varbdd  = require('debug')('tml:pfp:varbdd');
 const _dbg_rule    = require('debug')('tml:pfp:rule');
 
 // internal counter for lps (lp._id)
 const _counters = { lp: 0 };
+
+const bdd = new bdds();
 
 // a P-DATALOG rule in bdd form
 class rule {
@@ -29,23 +32,21 @@ class rule {
 	from_int(x, bits, offset) {
 		let r = bdds.T;
 		let b = bits--;
-		while (b--) r = this.bdds.and(r, this.bdds.from_bit(bits - b + offset, x & (1 << b)));
+		while (b--) r = bdd.and(r, bdd.from_bit(bits - b + offset, x & (1 << b)));
 		return r;
 	}
 
 	from_range(max, bits, offset) {
 		let x = bdds.F;
 		for (let n = 1; n < max; ++n) {
-			x = this.bdds.or(x, this.from_int(n, bits, offset));
+			x = bdd.or(x, this.from_int(n, bits, offset));
 		}
 		return x;
 	}
 
 	// initialize rule
-	constructor(bdb, v, bits, dsz) {
+	constructor(v, bits, dsz) {
 		_dbg_rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v);
-		this.bdds = bdb;
-		this.neg  = false;
 		this.hsym = bdds.T;
 		this.sels = [];
 		this.bd = [];
@@ -79,7 +80,7 @@ class rule {
 			}
 			for (let j = 0; j != ar; ++j) {
 				if (v[i][j] >= 0) {
-					d.sel = this.bdds.and(d.sel, this.from_int(v[i][j], bits, j * bits));
+					d.sel = bdd.and(d.sel, this.from_int(v[i][j], bits, j * bits));
 					for (let b = 0; b != bits; ++b) {
 						d.ex[b+j*bits] = true;
 					}
@@ -87,11 +88,11 @@ class rule {
 					if (m.hasOwnProperty(v[i][j])) {
 						for (let b = 0; b != bits; ++b) {
 							d.ex[b+j*bits] = true;
-							d.sel = this.bdds.and(d.sel, this.bdds.from_eq(b+j*bits, b+m[v[i][j]]*bits));
+							d.sel = bdd.and(d.sel, bdd.from_eq(b+j*bits, b+m[v[i][j]]*bits));
 						}
 					} else {
 						m[v[i][j]] = j;
-						d.sel = this.bdds.and(d.sel, this.from_range(dsz, bits, j * bits));
+						d.sel = bdd.and(d.sel, this.from_range(dsz, bits, j * bits));
 					}
 				}
 			}
@@ -100,11 +101,11 @@ class rule {
 		}
 		for (let j = 0; j != ar; ++j) {
 			if (v[0][j] >= 0) {
-				this.hsym = this.bdds.and(this.hsym, this.from_int(v[0][j], bits, j * bits));
+				this.hsym = bdd.and(this.hsym, this.from_int(v[0][j], bits, j * bits));
 			} else {
 				if (m.hasOwnProperty(v[0][j])) {
 					for (let b = 0; b != bits; ++b) {
-						this.hsym = this.bdds.and(this.hsym, this.bdds.from_eq(b+j*bits, b+m[v[0][j]]*bits));
+						this.hsym = bdd.and(this.hsym, bdd.from_eq(b+j*bits, b+m[v[0][j]]*bits));
 					}
 				} else {
 					m[v[0][j]] = j;
@@ -131,41 +132,45 @@ class rule {
 
 	fwd(db, bits, ar, s) {
 		const varbdd = (b, db, s) => {
+			_dbg_varbdd(`varbdd(db: ${db}, s:`, s, `b:`, b);
 			const sb = b.neg ? s.neg : s.pos;
 			const key = b.sel+'.'+b.ex.join(',');
 			if (sb.hasOwnProperty(key)) {
-				return this.bdds.permute(sb[key], b.perm);
+				const res = bdd.permute(sb[key], b.perm);
+				_dbg_varbdd(`varbdd key = ${key} res =`, res);
+				return res;
 			}
-			const r = b.neg
-				? this.bdds.and_not_ex(b.sel, db, b.ex)
-				: this.bdds.and_ex(b.sel, db, b.ex);
+			let r = b.neg
+				? bdd.and_not(b.sel, db)
+				: bdd.and(b.sel, db);
+			r = bdd.ex(r, b.ex);
 			sb[key] = r;
-			return this.bdds.permute(r, b.perm);
+			const res = bdd.permute(r, b.perm);
+			_dbg_varbdd("varbdd res =", res);
+			return res;
 		};
-
 		if (this.bd.length === 1) {
-			return this.bdds.deltail(
-				this.bdds.and(this.hsym, varbdd(this.bd[0], db, s)),
+			return bdd.deltail(
+				bdd.and(this.hsym, varbdd(this.bd[0], db, s)),
 				bits * ar);
 		}
-		if (this.bd.length == 2) {
-			return this.bdds.deltail(
-				this.bdds.and(this.hsym, this.bdds.and(
-					varbdd(this.bd[0], db, s),
-					varbdd(this.bd[1], db, s)
-				),
-				bits * ar));
+		if (this.bd.length === 2) {
+			const second = varbdd(this.bd[1], db, s);
+			const first = varbdd(this.bd[0], db, s);
+			const t = bdd.and(this.hsym, bdd.and(first, second));
+			const r = bdd.deltail(t, bits * ar);
+			return r;
 		}
 		let vars = bdds.T;
 		const v = [];
 		for (let i = 0; i < this.bd.length; i++) {
 			const b = this.bd[i];
-			vars = this.bdds.and(vars, varbdd(b, db, s));
+			vars = bdd.and(vars, varbdd(b, db, s));
 			if (bdds.F === vars) return bdds.F;
 			v.push(vars);
 		}
 		v.push(this.hsym);
-		return this.bdds.and_deltail(this.bdds.and_many(v), bits * ar);
+		return bdd.and_deltail(bdd.and_many(v), bits * ar);
 	}
 }
 
@@ -173,8 +178,7 @@ class rule {
 class lp {
 	constructor(maxbits, arity, dsz) {
 		this._id = ++_counters.lp;
-		// holds its own dict so we can determine the universe size
-		this.bdds = new bdds();
+		this.bdd = bdd; // keep link to the bdd
 		this.db = bdds.F;
 		this.rules = [];     // p-datalog rules
 		this.ar = arity;
@@ -187,10 +191,10 @@ class lp {
 	// single pfp step
 	rule_add(x) {
 		_dbg_rule(`rule_add() x:`, x);
-		const r = new rule(this.bdds, x, this.bits, this.dsz);
+		const r = new rule(x, this.bits, this.dsz);
 		if (x.length === 1) {
 			_dbg_rule('rule_add fact');
-			this.db = this.bdds.or(this.db, r.hsym); // fact
+			this.db = bdd.or(this.db, r.hsym); // fact
 		} else {
 			_dbg_rule('rule_add rule');
 			this.rules.push(r);
@@ -202,24 +206,24 @@ class lp {
 		this.p.pos = {}; this.p.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
-			const t = this.bdds.or(
+			const t = bdd.or(
 				r.fwd(this.db, this.bits, this.ar, this.p),
 				r.neg ? del : add);
 			if (r.neg) { del = t; } else { add = t; }
 		}
-		let s = this.bdds.and_not(add, del);
+		let s = bdd.and_not(add, del);
 		_dbg_pfp('db:', this.db, 'add:', add, 'del:', del, 's:', s);
 		if (s === bdds.F && add !== bdds.F) {
 			this.db = bdds.F; // detect contradiction
 			_dbg_pfp('db set (contradiction):', this.db);
 		} else {
-			this.db = this.bdds.or(this.bdds.and_not(this.db, del), s);
+			this.db = bdd.or(bdd.and_not(this.db, del), s);
 			_dbg_pfp('db set:', this.db);
 		}
 	}
 
 	from_bits(x) {
-		const s = this.bdds.allsat(x, this.bits * this.ar);
+		const s = bdd.allsat(x, this.bits * this.ar);
 		const r = Array(s.length);
 		for (let k = 0; k < r.length; k++) {
 			r[k] = Array(this.ar).fill(0);
@@ -238,7 +242,6 @@ class lp {
 	}
 }
 
-module.exports = () => {
-	lp.rule = rule;
-	return lp;
+module.exports = {
+	lp
 }
