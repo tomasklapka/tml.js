@@ -14,6 +14,7 @@
 
 "use strict";
 
+const { bdds } = require('./bdds')();
 const { lp } = require("./lp");
 
 // debug functions
@@ -83,8 +84,9 @@ class driver {
 		this.d = new dict();
 		this.mult = false;
 		this.progs = [];
+		this.proofs = [];
 	}
-	printbdd(os = '', t) {
+	printbdd(os = '', t, prog) {
 		if (!Array.isArray(t)) {
 			t = this.progs[this.progs.length-1].getbdd(t);
 		}
@@ -109,32 +111,60 @@ class driver {
 	toString() { return this.printdb(); }
 
 	// pfp logic
-	pfp(p) {
-		if (!p) {
-			let r = this.pfp(this.progs[0]);
+	pfp(p, proof = null) {
+		if (proof === null) {
+			proof = p;
+			let r; // = true; // ?
+			this.pfp(this.progs[0], proof ? this.proofs[0] : 0);
 			for (let n = 1; n != this.progs.length; ++n) {
 				this.progs[n].db = this.progs[n-1].db;
-				r = this.pfp(this.progs[n]);
+				r = this.pfp(this.progs[n], proof ? this.proofs[n] : 0);
 				if (!r) return false;
 			}
-			console.log(this.printdb());
-			return r;
+			console.log(this.printdb('', this.progs.length-1));
+			return true; //r;
 		}
+		const pr = [];
 		let d;                       // current db root
-		let t = 0;                   // step counter
+		let t = 0;
+		let step = 0;                // step counter
 		const s = [];                // db roots of previous steps
+		const add = {}, del = {};
 		do {
+			add.add = bdds.F;
+			del.del = bdds.F;
 			d = p.db;       // get current db root
 			s.push(d);           // store current db root into steps
-			_dbg_pfp(`____________________STEP_${++t}________________________`);
+			_dbg_pfp(`____________________STEP_${++step}________________________`);
 			_dbg_pfp(`                                                     `);
-			p.fwd();         // do pfp step
-			_dbg_pfp(`___________________/STEP_${t}________________________`);
-			// if db root already resulted from previous step
+			p.fwd(add, del, proof ? pr : 0);         // do pfp step
+			_dbg_pfp(`___________________/STEP_${step}________________________`);
+			t = p.bdd.and_not(add.add, del.del);
+			_dbg_pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t);
+			if (t === bdds.F && add.add !== bdds.F) {
+				p.db = bdds.F;
+				_dbg_pfp('db set (contradiction):', p.db);
+			} else {
+				p.db = p.bdd.or(p.bdd.and_not(p.db, del.del), t);
+				_dbg_pfp('db set:', p.db);
+			}
+			// if db root already resulted from any previous step
 			if (s.includes(p.db)) {
-				return d === p.db;
+				if (d !== p.db) return false; // unsat
+				break;
 			}
 		} while (true);
+		if (!proof) return true;
+		const q = this.prog_create(JSON.parse(JSON.stringify(proof)), false);
+		q.db = bdds.F;
+		add.add = bdds.F;
+		del.del = bdds.F;
+		for (let i = 0; i != pr.length; ++i) {
+			q.db = bdd.or(q.db, pr[i]);
+		}
+		q.fwd(add, del, 0);
+		console.log(this.printbdd(q, add));
+		return true;
 	}
 	// parse a string and returns its dict id
 	str_read(s) {
@@ -238,52 +268,58 @@ class driver {
 		} while (true);
 	}
 	// parses prog
-	prog_read(s) {
-		let ar    = 0;           // arity
-		let l, r  = [];          // length and rules
+	prog_read(s, proof) {
+		const rules  = []; // rules
 
-		for (let t; !((t = this.rule_read(s)).length === 0); r.push(t)) {
-			let i = 0;
-			for (let x = t[0]; i < t.length; x = t[++i]) {
-				ar = Math.max(ar, x.length - 1);
-			}
+		for (let t; !((t = this.rule_read(s)).length === 0); rules.push(t)) {
 			skip_ws(s);
 			if (s.s[0] === '}') {
 				if (!this.mult) { throw new Error(rbrace_unexpected); }
-				r.push(t);
+				rules.push(t);
 				break;
 			}
 			if (s.s[0] === '{') { throw new Error(lbrace_unexpected); }
 		}
 		_dbg_dict(this.d);
+		const p = this.prog_create(rules, proof);
+		_dbg_bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', '));
+		_dbg_bdd(`prog_read bits:${this.d.bits}`);
+		return p;
+	}
+	prog_create(r, proof) {
+		let ar = 0;
+		for (let i = 0; i != r.length; ++i ) {
+			for (let j = 0; j != r[i].length; ++j) {
+				ar = Math.max(ar, r[i][j].length - 1);
+			}
+		}
 		const p = new lp(this.d.bits, ar, this.d.nsyms);
-		for (let i = r.length-1; i >= 0; i--) {
+		_dbg_parser(`p.ruleadd.... rules:`, r);
+		for (let i = 0; i != r.length; i++) {
 			for (let j = 0; j < r[i].length; j++) {
-				l = r[i][j].length;
+				const l = r[i][j].length;
 				if (l < ar+1) {
 					r[i][j] = r[i][j].concat(Array(ar + 1 - l).fill(dict.pad));
 				}
 			}
 			_dbg_parser(`p.rule_add(r[${i}]):`, r[i]);
-			p.rule_add(r[i]);
+			p.rule_add(r[i], proof ? this.proofs[this.proofs.length-1] : 0);
 		}
-		_dbg_bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_bdd(`prog_read bits:${this.d.bits} ar:${ar}`);
 		return p;
 	}
-	progs_read(prog) {
+	progs_read(prog, proof) {
 		const s = { s: prog };
 		skip_ws(s);
 		this.mult = (s.s[0] === '{');
 		if (!this.mult) {
-			this.progs.push(this.prog_read(s));
+			this.progs.push(this.prog_read(s, proof));
 			return;
 		}
 		while (s.s.length > 0) {
 			skip_ws(s);
 			if (s.s[0] === '{') {
 				skip(s);
-				this.progs.push(this.prog_read(s));
+				this.progs.push(this.prog_read(s, proof));
 			}
 			skip_ws(s);
 			if (s.s[0] !== '}') {
@@ -339,16 +375,17 @@ async function main() {
 			return 4;
 		}
 	}
+	const proof = false;
 	const d = new driver();
 	try {
-		d.progs_read(s); // parse source from s
+		d.progs_read(s, proof); // parse source from s
 	} catch (err) {
 		console.log('Parse error:', err);
 		return 3;
 	}
 	let r = false;
 	try {
-		r = d.pfp();    // run pfp logic program
+		r = d.pfp(proof);    // run pfp logic program
 	} catch (err) {
 		console.log('PFP error', err);
 		return 2;

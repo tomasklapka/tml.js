@@ -20,9 +20,15 @@ const options = {
 }
 
 // debug functions
+//const _dbg_and_many    = require('debug')('tml:bdd:and_many');
+//const _dbg_and_ex      = require('debug')('tml:bdd:and_ex');
+//const _dbg_and_not_ex  = require('debug')('tml:bdd:and_not_ex');
+//const _dbg_and_many_fn_enter    = require('debug')('tml:bdd:fn:enter:and_many');
+//const _dbg_and_ex_fn_enter      = require('debug')('tml:bdd:fn:enter:and_ex');
+//const _dbg_and_not_ex_fn_enter  = require('debug')('tml:bdd:fn:enter:and_not_ex');
 
 // internal counters for apply calls
-const _counters = { apply: 0, or: 0, ex: 0, and: 0, deltail: 0, and_many: 0,
+const _counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
 	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0 };
 
 // node in a bdd tree
@@ -89,10 +95,11 @@ class bdds {
 	}
 	// adds new node
 	add(n) {
+		const id = ++_counters.add;
 		let r = null;
 		let _dbg = '';
 		do {
-			if (n.hi === n.lo) { r = n.hi; break; }
+			if (n.hi === n.lo) { r = n.hi; _dbg = 'hi === lo'; break; }
 			if (this.M.hasOwnProperty(n.key)) { r = this.M[n.key]; break; }
 			r = this.add_nocheck(n);
 			_dbg = ' nocheck';
@@ -394,14 +401,14 @@ class bdds {
 		if (eq) return t;
 		const v1 = Array(v.length - from);
 		const v2 = Array(v.length - from);
-		for (i = from; i != v.length; ++i) {
+		for (let i = from; i != v.length; ++i) {
 			if (!b || this.getnode(v[i]).v === m) {
 				v1.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).hi);
 			} else {
 				v1.push(v[i]);
 			}
 		}
-		for (i = from; i != v.length; ++i) {
+		for (let i = from; i != v.length; ++i) {
 			if (!b || this.getnode(v[i]).v === m) {
 				v2.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).lo);
 			} else {

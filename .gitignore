@@ -6,3 +6,5 @@ dist
 *.dot
 *.svg
 *.png
+test/tau
+test/tau.debug

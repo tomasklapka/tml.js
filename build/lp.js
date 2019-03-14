@@ -21,94 +21,121 @@ const { bdds } = require('./bdds')();
 // internal counter for lps (lp._id)
 const _counters = { lp: 0 };
 
+// messages
+const err_proof = `proof extraction yet unsupported for programs ` +
+	`with negation or deletion.`;
+
 const bdd = new bdds();
+
+function from_int_and(x, y, o, r) { return bdd.and(r, from_int(x, y, o)); }
+
+function from_int(x, bits, offset) {
+	let r = bdds.T;
+	let b = bits--;
+	while (b--) r = bdd.and(r, bdd.from_bit(bits - b + offset, x & (1 << b)));
+	return r;
+}
+
+function from_eq(src, dst, l, r) {
+	while (l--) r = bdd.and(r, bdd.from_eq(src + l, dst + l));
+	return r;
+}
+
+function from_range(max, bits, offset, r) {
+	let x = bdds.F;
+	for (let n = 1; n < max; ++n) {
+		x = bdd.or(x, from_int(n, bits, offset));
+	}
+	return bdd.and(r, x);
+}
+
+function varcount(v) {
+	const vars = [];
+	for (let i = 0; i != v.length; ++i) {
+		for (let j = 1; j != v[i].length; ++j) {
+			if (v[i][j] < 0 && !vars.includes(v[i][j])) vars.push(v[i][j]);
+		}
+	}
+	return vars.length;
+}
+
+class rule_body {
+	constructor(t, ar, bits, dsz, nvars) {
+		this.neg = t[0] < 0;
+		this.sel = bdds.T;
+		this.ex = new Array(bits * ar).fill(false);
+		this.perm = new Array((ar + nvars) * bits);
+		t.shift();
+		for (let b = 0; b != (ar + nvars) * bits; ++b) {
+			this.perm[b] = b;
+		}
+		const m = {};
+		for (let j = 0; j != ar; ++j) {
+			this.from_arg(t[j], j, bits, dsz, m)
+		}
+
+	}
+
+	from_arg(vij, j, bits, dsz, m) {
+		if (vij >= 0) {
+			this.ex.fill(true, j * bits, (j+1) * bits);
+			this.sel = from_int_and(vij, bits, j * bits, this.sel);
+		} else {
+			if (m.hasOwnProperty(vij)) {
+				this.ex.fill(true, j * bits, (j+1) * bits);
+				this.sel = from_eq(j * bits, m[vij] * bits, bits, this.sel)
+			} else {
+				m[vij] = j;
+				this.sel = from_range(dsz, bits, j * bits, this.sel);
+			}
+		}
+	}
+
+	varbdd(db, p) {
+		const sb = this.neg ? p.neg : p.pos;
+		const key = this.sel+'.'+this.ex.join(',');
+		if (sb.hasOwnProperty(key)) {
+			const res = bdd.permute(sb[key], this.perm);
+			return res;
+		}
+		let r = this.neg
+			? bdd.and_not(this.sel, db)
+			: bdd.and(this.sel, db);
+		r = bdd.ex(r, this.ex);
+		sb[key] = r;
+		const res = bdd.permute(r, this.perm);
+		return res;
+	};
+}
 
 // a P-DATALOG rule in bdd form
 class rule {
 
-	from_int(x, bits, offset) {
-		let r = bdds.T;
-		let b = bits--;
-		while (b--) r = bdd.and(r, bdd.from_bit(bits - b + offset, x & (1 << b)));
-		return r;
-	}
-
-	from_range(max, bits, offset) {
-		let x = bdds.F;
-		for (let n = 1; n < max; ++n) {
-			x = bdd.or(x, this.from_int(n, bits, offset));
-		}
-		return x;
-	}
-
 	// initialize rule
-	constructor(v, bits, dsz) {
+	constructor(v, bits, dsz, proof) {
 		this.hsym = bdds.T;
 		this.sels = [];
 		this.bd = [];
 		const ar = v[0].length - 1;
+		let k = ar;
 		this.neg = v[0][0] < 0;
-		v[0] = v[0].slice(1);
-		const vars = [];
-		for (let i = 0; i != v.length; ++i) {
-			const x = v[i];
-			for (let j = 0; j != x.length; ++j) {
-				const y = x[j];
-				if (y < 0 && !vars.includes(y)) {
-					vars.push(y);
-				}
-			}
-		}
-		const nvars = vars.length;
-		let m = {};
+		v[0].shift(); // = v[0].slice(1);
+		const nvars = varcount(v);
 		for (let i = 1; i != v.length; ++i) {
-			const d = {
-				neg: v[i][0] < 0,
-				sel: bdds.T,
-				perm: [],
-				ex: []
-			};
-			v[i].shift();
-			d.ex = new Array(bits*ar).fill(false);
-			d.perm = new Array((ar + nvars) * bits);
-			for (let b = 0; b != (ar + nvars) * bits; ++b) {
-				d.perm[b] = b;
-			}
-			for (let j = 0; j != ar; ++j) {
-				if (v[i][j] >= 0) {
-					d.sel = bdd.and(d.sel, this.from_int(v[i][j], bits, j * bits));
-					for (let b = 0; b != bits; ++b) {
-						d.ex[b+j*bits] = true;
-					}
-				} else {
-					if (m.hasOwnProperty(v[i][j])) {
-						for (let b = 0; b != bits; ++b) {
-							d.ex[b+j*bits] = true;
-							d.sel = bdd.and(d.sel, bdd.from_eq(b+j*bits, b+m[v[i][j]]*bits));
-						}
-					} else {
-						m[v[i][j]] = j;
-						d.sel = bdd.and(d.sel, this.from_range(dsz, bits, j * bits));
-					}
-				}
-			}
-			m = {};
-			this.bd.push(d);
+			this.bd.push(new rule_body(v[i], ar, bits, dsz, nvars));
 		}
+		let m = {};
 		for (let j = 0; j != ar; ++j) {
 			if (v[0][j] >= 0) {
-				this.hsym = bdd.and(this.hsym, this.from_int(v[0][j], bits, j * bits));
+				this.hsym = bdd.and(this.hsym, from_int(v[0][j], bits, j * bits));
 			} else {
 				if (m.hasOwnProperty(v[0][j])) {
-					for (let b = 0; b != bits; ++b) {
-						this.hsym = bdd.and(this.hsym, bdd.from_eq(b+j*bits, b+m[v[0][j]]*bits));
-					}
+					this.hsym = from_eq(j * bits, m[v[0][j]] * bits, bits, this.hsym);
 				} else {
 					m[v[0][j]] = j;
 				}
 			}
 		}
-		let k = ar;
 		for (let i = 0; i != v.length-1; ++i) {
 			for (let j = 0; j != ar; ++j) {
 				if (v[i+1][j] < 0) {
@@ -116,54 +143,56 @@ class rule {
 						m[v[i+1][j]] = k++;
 					}
 					for (let b = 0; b != bits; ++b) {
-						this.bd[i].perm[b+j*bits]=b+m[v[i+1][j]]*bits;
+						this.bd[i].perm[b+j*bits] = b + m[v[i+1][j]] * bits;
 					}
 				}
 			}
 		}
-		if (v.length > 1) {
-			this.sels = new Array(v.length-1);
+		if (!proof) return;
+		if (neg) throw new Error(err_proof);
+		for (let i = 0; i != this.bd.length; ++i) {
+			if (this.bd[i].neg) throw new Error(err_proof);
 		}
+		//throw new Error('proof not implemented');
+		const prf = [ [1], [1] ];
+		prf[0] = prf[0].concat(v[0]);
+		prf[1] = prf[1].concat(v[0]);
+		for (let i = 0; i != m.length; ++i) {
+			if (m[i] >= ar) { prf[1].push(i); }
+		}
+		for (let i = 0; i < this.bd.length; ++i) {
+			prf[0] = prf[0].concat(v[i+1]);
+		}
+		proof.push(prf);
 	}
 
-	fwd(db, bits, ar, s) {
-		const varbdd = (b, db, s) => {
-			const sb = b.neg ? s.neg : s.pos;
-			const key = b.sel+'.'+b.ex.join(',');
-			if (sb.hasOwnProperty(key)) {
-				const res = bdd.permute(sb[key], b.perm);
-				return res;
-			}
-			let r = b.neg
-				? bdd.and_not(b.sel, db)
-				: bdd.and(b.sel, db);
-			r = bdd.ex(r, b.ex);
-			sb[key] = r;
-			const res = bdd.permute(r, b.perm);
-			return res;
-		};
-		if (this.bd.length === 1) {
-			return bdd.deltail(
-				bdd.and(this.hsym, varbdd(this.bd[0], db, s)),
-				bits * ar);
-		}
-		if (this.bd.length === 2) {
-			const second = varbdd(this.bd[1], db, s);
-			const first = varbdd(this.bd[0], db, s);
-			const t = bdd.and(this.hsym, bdd.and(first, second));
-			const r = bdd.deltail(t, bits * ar);
-			return r;
-		}
+	fwd(db, bits, ar, s, p) {
 		let vars = bdds.T;
 		const v = [];
-		for (let i = 0; i < this.bd.length; i++) {
-			const b = this.bd[i];
-			vars = bdd.and(vars, varbdd(b, db, s));
+		do {
+			if (this.bd.length === 1) {
+				vars = bdd.and(this.hsym, this.bd[0].varbdd(db, s));
+				if (bdds.F === vars) return bdds.F;
+				break;
+			}
+			if (this.bd.length === 2) {
+				const first = this.bd[1].varbdd(db, s);
+				const second = this.bd[0].varbdd(db, s);
+				vars = bdd.and(this.hsym, bdd.and(second, first));
+				if (bdds.F === vars) return bdds.F;
+				break;
+			}
+			for (let i = 0; i < this.bd.length; i++) {
+				vars = this.bd[i].varbdd(db, s);
+				if (bdds.F === vars) return bdds.F;
+				v.push(vars);
+			}
+			v.push(this.hsym);
+			vars = bdd.and_many(v);
 			if (bdds.F === vars) return bdds.F;
-			v.push(vars);
-		}
-		v.push(this.hsym);
-		return bdd.and_deltail(bdd.and_many(v), bits * ar);
+		} while (0);
+		if (p) p.push(vars);
+		return bdd.deltail(vars, bits * ar);
 	}
 }
 
@@ -182,30 +211,22 @@ class lp {
 	getbdd(t) { return this.from_bits(t)}
 	getdb() { return this.getbdd(this.db); }
 	// single pfp step
-	rule_add(x) {
-		const r = new rule(x, this.bits, this.dsz);
+	rule_add(x, proof) {
+		const r = new rule(x, this.bits, this.dsz, proof);
 		if (x.length === 1) {
 			this.db = bdd.or(this.db, r.hsym); // fact
 		} else {
 			this.rules.push(r);
 		}
 	}
-	fwd() {
-		let add = bdds.F;
-		let del = bdds.F;
+	fwd(add, del, proof) {
 		this.p.pos = {}; this.p.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
 			const t = bdd.or(
-				r.fwd(this.db, this.bits, this.ar, this.p),
-				r.neg ? del : add);
-			if (r.neg) { del = t; } else { add = t; }
-		}
-		let s = bdd.and_not(add, del);
-		if (s === bdds.F && add !== bdds.F) {
-			this.db = bdds.F; // detect contradiction
-		} else {
-			this.db = bdd.or(bdd.and_not(this.db, del), s);
+				r.fwd(this.db, this.bits, this.ar, this.p, proof),
+				r.neg ? del.del : add.add);
+			if (r.neg) { del.del = t; } else { add.add = t; }
 		}
 	}
 
