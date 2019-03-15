@@ -34,21 +34,12 @@ const _dbg_and_not     = require('debug')('tml:bdd:and_not');
 //const _dbg_and_not_ex  = require('debug')('tml:bdd:and_not_ex');
 const _dbg_permute     = require('debug')('tml:bdd:permute');
 const _dbg_ite         = require('debug')('tml:bdd:ite');
-const _dbg_add_fn_enter         = require('debug')('tml:bdd:fn:enter:add');
-const _dbg_or_fn_enter          = require('debug')('tml:bdd:fn:enter:or');
-const _dbg_ex_fn_enter          = require('debug')('tml:bdd:fn:enter:ex');
-const _dbg_and_fn_enter         = require('debug')('tml:bdd:fn:enter:and');
-const _dbg_deltail_fn_enter     = require('debug')('tml:bdd:fn:enter:deltail');
-const _dbg_and_deltail_fn_enter = require('debug')('tml:bdd:fn:enter:and_deltail');
-//const _dbg_and_many_fn_enter    = require('debug')('tml:bdd:fn:enter:and_many');
-//const _dbg_and_ex_fn_enter      = require('debug')('tml:bdd:fn:enter:and_ex');
-const _dbg_and_not_fn_enter     = require('debug')('tml:bdd:fn:enter:and_not');
-//const _dbg_and_not_ex_fn_enter  = require('debug')('tml:bdd:fn:enter:and_not_ex');
-const _dbg_ite_fn_enter         = require('debug')('tml:bdd:fn:enter:ite');
+const _dbg_fn_enter    = (...a) => 0; //console.log(...a);
 
 // internal counters for apply calls
 const _counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
-	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0 };
+	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0,
+	sat: 0, add_nocheck: 0 };
 
 // node in a bdd tree
 class node {
@@ -81,8 +72,59 @@ class bdds {
 		this.add_nocheck(new node(0, 1, 1));
 		this.memos_clear();
 	}
+	_count(x, nvars) {
+		const n = this.getnode(x);
+		let k;
+		let r = 0;
+		if (bdds.leaf(n)) return bdds.trueleaf(n) ? 1 : 0;
+		k = this.getnode(n.hi);
+		r += this.count(n.hi, nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		k = getnode(n[2]);
+		r += count(n[2], nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		return r;
+	}
+	count(x, nvars) {
+		return x < 2
+			? x
+				? (1<<(nvars))
+				: 0
+			: (this._count(x, nvars) << (this.getnode(x).v-1));
+	}
+	onesat(x, nvars, r) {
+		if (bdds.leaf(x)) return bdds.trueleaf(x);
+		let n = this.getnode(x);
+		if (bdds.leaf(n.lo) && !bdds.trueleaf(n.lo)) {
+			r[n.v-1] = true;
+			return this.onesat(n.hi, nvars, r);
+		}
+		r[n.v-1] = false;
+		return this.onesat(n.lo, nvars, r);
+	}
+
+	from_int_and(x, y, o, r) {
+		return this.and(r, this.from_int(x, y, o));
+	}
+
+	from_int(x, bits, offset) {
+		const id = ++_counters.from_int;
+		_dbg_fn_enter(`from_int-${id}`);
+		let r = bdds.T;
+		let b = bits--;
+		while (b--) r = this.and(r, this.from_bit(bits - b + offset, x & (1 << b)));
+		return r;
+	}
+
+	pad(x, ar1, ar2, p, bits) {
+		for (let n = ar1; n != ar2; ++n) {
+			x = this.from_int_and(p, bits, n * bits, x);
+		}
+		return x;
+	}
+
 	// add node directly without checking
 	add_nocheck(n) {
+		const id = ++_counters.add_nocheck;
+		_dbg_fn_enter(`add_nocheck-${id}`);
 		const r = this.V.length;
 		this.M[n.key] = r;
 		this.V.push(n);
@@ -118,7 +160,7 @@ class bdds {
 	// adds new node
 	add(n) {
 		const id = ++_counters.add;
-		_dbg_add_fn_enter(`add-${id} (${n.key})`);
+		_dbg_fn_enter(`add-${id}`); _dbg_add(`add-${id} (${n.key})`);
 		let r = null;
 		let _dbg = '';
 		do {
@@ -132,6 +174,8 @@ class bdds {
 	}
 
 	sat(v, nvars, n, p, r) {
+		const id = ++_counters.sat;
+		_dbg_fn_enter(`sat-${id}`);
 		if (bdds.leaf(n) && !bdds.trueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
@@ -158,7 +202,7 @@ class bdds {
 
 	or(x, y) {
 		const or_id = ++_counters.or;
-		_dbg_or_fn_enter(`or-${or_id} (${x} or ${y})`);
+		_dbg_fn_enter(`or-${or_id} (${x} or ${y})`);
 		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
@@ -210,7 +254,7 @@ class bdds {
 
 	ex(x, b) {
 		const ex_id = ++_counters.ex;
-		_dbg_ex_fn_enter(`ex-${ex_id} (${x} ex ${b.map(n=>n?'1':'0').join('')})`);
+		_dbg_fn_enter(`ex-${ex_id} (${x} ex ${b.map(n=>n?'1':'0').join('')})`);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -244,7 +288,7 @@ class bdds {
 
 	and(x, y) {
 		const and_id = ++_counters.and;
-		_dbg_and_fn_enter(`and-${and_id} (${x} and ${y})`);
+		_dbg_fn_enter(`and-${and_id} (${x} and ${y})`);
 		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
@@ -296,7 +340,7 @@ class bdds {
 
 	and_not(x, y) {
 		const and_not_id = ++_counters.and_not;
-		_dbg_and_not_fn_enter(`and_not-${and_not_id} (${x} and_not ${y})`);
+		_dbg_fn_enter(`and_not-${and_not_id} (${x} and_not ${y})`);
 		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
@@ -347,7 +391,7 @@ class bdds {
 
 	deltail(x, h) {
 		const deltail_id = ++_counters.deltail;
-		_dbg_deltail_fn_enter(`deltail-${deltail_id} (${x} deltail ${h})`);
+		_dbg_fn_enter(`deltail-${deltail_id} (${x} deltail ${h})`);
 		let t;
 		let apply_ret = r => r;
 		if (options.memoization) {
@@ -377,7 +421,7 @@ class bdds {
 
 	and_deltail(x, y, h) {
 		const and_deltail_id = ++_counters.and_deltail;
-		_dbg_and_deltail_fn_enter(`and_deltail-${and_deltail_id} (${x} and_deltail ${y}, ${h})`);
+		_dbg_fn_enter(`and_deltail-${and_deltail_id} (${x} and_deltail ${y}, ${h})`);
 		if (x === y) return this.deltail(x, h);
 		let t;
 		let apply_ret = r => r;
@@ -429,7 +473,7 @@ class bdds {
 
 	and_many(v) {
 		const id = ++_counters.and_many;
-		_dbg_and_many_fn_enter(`and_many-${id} (v:${v.join(',')})`);
+		_dbg_fn_enter(`and_many-${id} (v:${v.join(',')})`);
 		let from = 0;
 		if (1 === (v.length - from)) {
 			return v[from];
@@ -593,7 +637,7 @@ class bdds {
 	// if-then-else operator
 	ite(v, t, e) {
 		const id = ++_counters.ite;
-		_dbg_ite_fn_enter(`ite-${id} (v:${v}, t:${t}, e:${e})`);
+		_dbg_fn_enter(`ite-${id} (v:${v}, t:${t}, e:${e})`);
 		const x = this.getnode(t);
 		const y = this.getnode(e);
 		_dbg_ite(`-ite-${id} (x:${x.key}, y:${y.key})`);
@@ -645,9 +689,17 @@ class bdds {
 	}
 
 	from_eq(x, y) { // a bdd saying "x=y"
-		const res = this.or(
-			this.and(this.from_bit(y, false), this.from_bit(x, false)),
-			this.and(this.from_bit(y, true),  this.from_bit(x, true)));
+		const n = new node();
+		if (x < y) {
+			n.v = x+1;
+			n.lo = this.from_bit(y, false);
+			n.hi = this.from_bit(y, true);
+		} else {
+			n.v = y+1;
+			n.lo = this.from_bit(x, false);
+			n.hi = this.from_bit(x, true);
+		}
+		const res = this.add(n);
 		_dbg_bdd(`from_eq x:${x} y:${y} = ${res}`);
 		return res;
 	}

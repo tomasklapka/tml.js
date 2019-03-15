@@ -23,13 +23,11 @@ const options = {
 //const _dbg_and_many    = require('debug')('tml:bdd:and_many');
 //const _dbg_and_ex      = require('debug')('tml:bdd:and_ex');
 //const _dbg_and_not_ex  = require('debug')('tml:bdd:and_not_ex');
-//const _dbg_and_many_fn_enter    = require('debug')('tml:bdd:fn:enter:and_many');
-//const _dbg_and_ex_fn_enter      = require('debug')('tml:bdd:fn:enter:and_ex');
-//const _dbg_and_not_ex_fn_enter  = require('debug')('tml:bdd:fn:enter:and_not_ex');
 
 // internal counters for apply calls
 const _counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
-	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0 };
+	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0,
+	sat: 0, add_nocheck: 0 };
 
 // node in a bdd tree
 class node {
@@ -62,8 +60,57 @@ class bdds {
 		this.add_nocheck(new node(0, 1, 1));
 		this.memos_clear();
 	}
+	_count(x, nvars) {
+		const n = this.getnode(x);
+		let k;
+		let r = 0;
+		if (bdds.leaf(n)) return bdds.trueleaf(n) ? 1 : 0;
+		k = this.getnode(n.hi);
+		r += this.count(n.hi, nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		k = getnode(n[2]);
+		r += count(n[2], nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		return r;
+	}
+	count(x, nvars) {
+		return x < 2
+			? x
+				? (1<<(nvars))
+				: 0
+			: (this._count(x, nvars) << (this.getnode(x).v-1));
+	}
+	onesat(x, nvars, r) {
+		if (bdds.leaf(x)) return bdds.trueleaf(x);
+		let n = this.getnode(x);
+		if (bdds.leaf(n.lo) && !bdds.trueleaf(n.lo)) {
+			r[n.v-1] = true;
+			return this.onesat(n.hi, nvars, r);
+		}
+		r[n.v-1] = false;
+		return this.onesat(n.lo, nvars, r);
+	}
+
+	from_int_and(x, y, o, r) {
+		return this.and(r, this.from_int(x, y, o));
+	}
+
+	from_int(x, bits, offset) {
+		const id = ++_counters.from_int;
+		let r = bdds.T;
+		let b = bits--;
+		while (b--) r = this.and(r, this.from_bit(bits - b + offset, x & (1 << b)));
+		return r;
+	}
+
+	pad(x, ar1, ar2, p, bits) {
+		for (let n = ar1; n != ar2; ++n) {
+			x = this.from_int_and(p, bits, n * bits, x);
+		}
+		return x;
+	}
+
 	// add node directly without checking
 	add_nocheck(n) {
+		const id = ++_counters.add_nocheck;
 		const r = this.V.length;
 		this.M[n.key] = r;
 		this.V.push(n);
@@ -108,6 +155,7 @@ class bdds {
 	}
 
 	sat(v, nvars, n, p, r) {
+		const id = ++_counters.sat;
 		if (bdds.leaf(n) && !bdds.trueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
@@ -571,9 +619,17 @@ class bdds {
 	}
 
 	from_eq(x, y) { // a bdd saying "x=y"
-		const res = this.or(
-			this.and(this.from_bit(y, false), this.from_bit(x, false)),
-			this.and(this.from_bit(y, true),  this.from_bit(x, true)));
+		const n = new node();
+		if (x < y) {
+			n.v = x+1;
+			n.lo = this.from_bit(y, false);
+			n.hi = this.from_bit(y, true);
+		} else {
+			n.v = y+1;
+			n.lo = this.from_bit(x, false);
+			n.hi = this.from_bit(x, true);
+		}
+		const res = this.add(n);
 		return res;
 	}
 

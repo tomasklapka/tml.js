@@ -14,45 +14,98 @@
 
 "use strict";
 
+const { etype, raw_progs } = require('./input');
 const { bdds } = require('./bdds')();
 const { lp } = require("./lp");
+let pad = require("./lp").pad;
 
 // debug functions
 
-// messages
-const identifier_expected     = `Identifier expected`;
-const term_expected           = `Term expected`;
-const comma_dot_sep_expected  = `',', '.' or ':-' expected`;
-const sep_expected            = `Term or ':-' or '.' expected`;
-const unexpected_char         = `Unexpected char`;
-const rbrace_unexpected       = `Unexpected '}'`;
-const lbrace_unexpected       = `Unexpected '{'`;
-const rbrace_expected         = `Expected '}'`;
-
-// skip_ws or skip 1 or more characters from parsing input
-const skip_ws = s           => { s.s = s.s.replace(/^\s+/, ''); };
-const skip    = (s, n = 1)  => { s.s = s.s.slice(n); }
-
-// dict represents strings as unique integers
-class dict {
-	// pad = 0 constant
-	static get pad() { return 0; }
-	// nsyms = number of stored symbols
-	get nsyms() { return this.syms.length; }
-	// returns bit size of the dictionary
-	get bits() { return 32 - Math.clz32(this.syms.length-1); }
-	// initialize symbols and variables tables
-	constructor() {
-		this.syms = [ dict.pad ];
-		this.vars = [ dict.pad ];
+class driver {
+	constructor(str, proof) {
+		// initialize symbols and variables tables
+		this.syms = [ pad ];
+		this.vars = [ pad ];
+		this.strs = [];
+		this.progs = [];
+		this.proofs = [];
+		this.mult = false;
+		this.nums = 0;
+		let rp;
+		try {
+			rp = new raw_progs(str); // parse source from s
+		} catch (err) {
+			console.log('Parse error:', err);
+			return
+		}
+		for (let n = 0; n != rp.p.length; ++n) {
+			this.strs[this.strs.length] = {};
+			for (let k = 0; k != rp.p[n].d.length; ++k) {
+				const d = rp.p[n].d[k];
+				if (d.fname) {
+					this.nums = Math.max(this.nums, 256 + d.arg.length-2);
+				} else {
+					this.nums = Math.max(this.nums, 256 + d.arg.length)
+				}
+			}
+		}
+		pad = this.dict_get('', 0);
+		let ar = 0;
+		for (let n = 0; n != rp.p.length; ++n) {
+			for (let k = 0; k != rp.p[n].d.length; ++k) {
+				ar = Math.max(ar, 4);
+				const d = rp.p[n].d[k];
+				const str = d.arg.slice(1, d.arg.length-1);
+				this.strs[n][this.dict_get(d.rel)] = d.fname ? file_read_text(str) : str;
+			}
+			for (let i = 0; i != rp.p[n].r.length; ++i) {
+				const x = rp.p[n].r[i];
+				ar = Math.max(ar, x.h.e.length);
+				for (let j = 0; j != x.h.e.length; ++j) {
+					const e = x.h.e[j];
+					if (e.type === etype.SYM) {
+						this.dict_get(e.e);
+					}
+				}
+				for (let k = 0; k != x.b.length; ++k) {
+					const y = x.b[k];
+					ar = Math.max(ar, y.e.length);
+					for (let j = 0; j != y.e.length; ++j) {
+						const e = y.e[j];
+						if (e.type === etype.SYM) {
+							this.dict_get(e.e);
+						}
+					}
+				}
+			}
+		}
+		for (let n = 0; n != rp.p.length; ++n) {
+			const m = [];
+			this.proofs.push([]);
+			for (let i = 0; i != rp.p[n].r.length; ++i) {
+				const x = rp.p[n].r[i];
+				m.push(this.get_rule(x));
+			}
+			this.prog_add(m, ar, this.strs[n], proof ? this.proofs[this.proofs.length] : null);
+		}
 	}
+	// nsyms = number of stored symbols
+	get nsyms() { return this.syms.length + this.nums; }
+	// returns bit size of the dictionary
+	get bits() { return 32 - Math.clz32(this.nsyms); }
 	// gets and remembers the identifier and returns it's unique index
 	// positive indexes are for symbols and negative indexes are for vars
-	get(s) {
+	dict_get(s) {
 		if (typeof(s) === 'number') {     // if s is number
-			const r = s >= 0 ? this.syms[s] : this.vars[-s];
+			if (s < this.syms.length) {
+				const r = s < 0 ? this.vars[-s] : this.syms[s];
+				return r;
+			}
+			const r = s - this.syms.length;
 			return r;                 //     return symbol by index
 		}
+		if (!s || !s.length) return pad;
+		if (/\d/.test(s[0])) throw new Error("symbol name cannot begin with a digit");
 		if (s[0] === '?') {               // if s is variable
 			const p = this.vars.indexOf(s);
 			if (p >= 0) {             //     if variable already in dict
@@ -68,18 +121,10 @@ class dict {
 		this.syms.push(s);                //     else store the symbol in dict
 		return this.syms.length-1;        //         and return its index
 	}
-}
 
-class driver {
-	constructor() {
-		this.d = new dict();
-		this.mult = false;
-		this.progs = [];
-		this.proofs = [];
-	}
-	printbdd(os = '', t, prog) {
+	printbdd(os = '', t) {
 		if (!Array.isArray(t)) {
-			t = this.progs[this.progs.length-1].getbdd(t);
+			t = this.progs[t].db;
 		}
 		const s = [];
 		for (let i = 0; i < t.length; i++) {
@@ -87,11 +132,11 @@ class driver {
 			let ss = '';
 			for (let j = 0; j < v.length; j++) {
 				const k = v[j];
-				if (k === dict.pad) ;
-				else if (k < this.d.nsyms) ss += this.d.get(k) + ' ';
+				if (k === pad) ss += '* ';
+				else if (k < this.nsyms) ss += this.dict_get(k) + ' ';
 				else ss += '[' + k + '] ';
 			}
-			s.push(ss.slice(0, -1) + '.');
+			s.push(ss);
 		}
 		os += s.sort().join(`\n`);
 		return os;
@@ -101,21 +146,74 @@ class driver {
 	}
 	toString() { return this.printdb(); }
 
+	get_term(r) {
+		const t = [];
+		t.push(r.neg ? -1 : 1);
+		for (let i = 0; i != r.e.length; ++i) {
+			const e = r.e[i];
+			if (e.type === etype.NUM) t.push(e.num);
+			else if (e.type === etype.CHR) t.push(e.e[0]);
+			else t.push(this.dict_get(e.e));
+		}
+		return t;
+	}
+
+	get_rule(r) {
+		const m = [];
+		m.push(this.get_term(r.h));
+		for (let i = 0; i != r.b.length; ++i) {
+			m.push(this.get_term(r.b[i]));
+		}
+		return m;
+	}
+
+	term_pad(t, ar) {
+		const l = t.length;
+		if (l < ar+1) {
+			t = t.concat(Array(ar + 1 - l).fill(pad));
+		}
+	}
+
+	rule_pad(t, ar) {
+		const r = t.slice();
+		for (let i = 0; i != r.length; ++i) {
+			this.term_pad(r[i], ar);
+		}
+		return r;
+	}
+
+	prog_add(m, ar, s, proof) {
+		const p = new lp(this.bits, ar, this.nsyms);
+		this.progs.push(p);
+		const keys = Object.keys(s);
+		for (let i = 0; i != keys.length; ++i) {
+			const x = s[keys[i]];
+			for (let n = 0; n != x.length; ++n) {
+				p.rule_add(rule_pad([ [ 1, n, n + 256, x[n]] ], ar), proof);
+			}
+		}
+		while (m.length) {
+			const x = m.shift();
+			p.rule_add(this.rule_pad(x, ar), proof);
+		}
+		return p;
+	}
 	// pfp logic
 	pfp(p, proof = null) {
-		if (proof === null) {
+		if (proof === null && (p === true || p === false)) {
 			proof = p;
 			let r; // = true; // ?
+			const sz = this.progs.length;
 			this.pfp(this.progs[0], proof ? this.proofs[0] : 0);
-			for (let n = 1; n != this.progs.length; ++n) {
+			for (let n = 1; n != sz; ++n) {
 				this.progs[n].db = this.progs[n-1].db;
 				r = this.pfp(this.progs[n], proof ? this.proofs[n] : 0);
 				if (!r) return false;
 			}
-			console.log(this.printdb('', this.progs.length-1));
+			console.log(this.printdb('', sz - 1));
 			return true; //r;
 		}
-		const pr = [];
+		const pf = [];
 		let d;                       // current db root
 		let t = 0;
 		let step = 0;                // step counter
@@ -126,186 +224,32 @@ class driver {
 			del.del = bdds.F;
 			d = p.db;       // get current db root
 			s.push(d);           // store current db root into steps
-			p.fwd(add, del, proof ? pr : 0);         // do pfp step
+			p.fwd(add, del, proof ? pf : 0);         // do pfp step
 			t = p.bdd.and_not(add.add, del.del);
 			if (t === bdds.F && add.add !== bdds.F) {
-				p.db = bdds.F;
+				return false;
 			} else {
 				p.db = p.bdd.or(p.bdd.and_not(p.db, del.del), t);
 			}
 			// if db root already resulted from any previous step
-			if (s.includes(p.db)) {
-				if (d !== p.db) return false; // unsat
-				break;
-			}
+			if (d === p.db) break;
+			if (s.includes(p.db)) return false; // unsat
 		} while (true);
 		if (!proof) return true;
-		const q = this.prog_create(JSON.parse(JSON.stringify(proof)), false);
+
+		const ar = p.proof_arity();
+		for (let i = 0; i != proof.length; ++i) { console.log(proof[i]); }
+		const q = this.prog_add(
+			JSON.parse(JSON.stringify(proof)),
+			ar, {}, false);
 		q.db = bdds.F;
 		add.add = bdds.F;
 		del.del = bdds.F;
-		for (let i = 0; i != pr.length; ++i) {
-			q.db = bdd.or(q.db, pr[i]);
-		}
+		q.db = q.get_varbdd();
 		q.fwd(add, del, 0);
 		console.log(this.printbdd(q, add));
 		return true;
 	}
-	// parse a string and returns its dict id
-	str_read(s) {
-		const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
-		let _dbg_match;
-		let r = null;
-		s.s = s.s.replace(/^\s*(\??[\w|\d]+)\s*/, (_, t) => {
-			r = this.d.get(t);
-			return '';   // remove match from input
-		})
-		if (!r) {
-			throw new Error(identifier_expected);
-		}
-		return r;
-	}
-	// read raw term (no bdd)
-	term_read(s) {
-		const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
-		let r = [];
-		skip_ws(s);
-		if (s.s.length === 0) {
-			return r;
-		}
-		let b;
-		if (s.s[0] === '~') {
-			b = -1;
-			skip(s); skip_ws(s);
-		} else {
-			b = 1;
-		}
-		r.push(b);
-		let i = 0;
-		do {
-			const c = s.s[i];
-			if (/\s/.test(c)) i++;
-			else {
-				if (c === ',') {
-					if (r.length === 1) {
-						throw new Error(term_expected);
-					}
-					skip(s, ++i);
-					return r;
-				}
-				if (c === '.' || c === ':') {
-					if (r.length === 1) {
-						throw new Error(term_expected);
-					}
-					skip(s, i);
-					return r;
-				}
-				r.push(this.str_read(s)); i = 0;
-			}
-		} while (i < s.s.length);
-		throw new Error(comma_dot_sep_expected);
-	}
-	// read raw rule (no bdd)
-	rule_read(s) {
-		const _dbg = s.s.slice(0, s.s.indexOf(`\n`));
-		let t, r = [];
-		if ((t = this.term_read(s)).length === 0) {
-			return r;
-		}
-		r.push(t);
-		skip_ws(s);
-		if (s.s[0] === '.') { // fact
-			skip(s);
-			return r;
-		}
-		if (s.s.length < 2 || (s.s[0] !== ':' && s.s[1] !== '-')) {
-			throw new Error (sep_expected);
-		}
-		skip(s, 2);
-		do {
-			if ((t = this.term_read(s)).length === 0) {
-				throw new Error(term_expected);
-			}
-			r.push(t);
-			skip_ws(s);
-			if (s.s[0] === '.') {
-				skip(s);
-				return r;
-			}
-			if (s.s[0] === ':') {
-				throw new Error(unexpected_char);
-			};
-		} while (true);
-	}
-	// parses prog
-	prog_read(s, proof) {
-		const rules  = []; // rules
-
-		for (let t; !((t = this.rule_read(s)).length === 0); rules.push(t)) {
-			skip_ws(s);
-			if (s.s[0] === '}') {
-				if (!this.mult) { throw new Error(rbrace_unexpected); }
-				rules.push(t);
-				break;
-			}
-			if (s.s[0] === '{') { throw new Error(lbrace_unexpected); }
-		}
-		const p = this.prog_create(rules, proof);
-		return p;
-	}
-	prog_create(r, proof) {
-		let ar = 0;
-		for (let i = 0; i != r.length; ++i ) {
-			for (let j = 0; j != r[i].length; ++j) {
-				ar = Math.max(ar, r[i][j].length - 1);
-			}
-		}
-		const p = new lp(this.d.bits, ar, this.d.nsyms);
-		for (let i = 0; i != r.length; i++) {
-			for (let j = 0; j < r[i].length; j++) {
-				const l = r[i][j].length;
-				if (l < ar+1) {
-					r[i][j] = r[i][j].concat(Array(ar + 1 - l).fill(dict.pad));
-				}
-			}
-			p.rule_add(r[i], proof ? this.proofs[this.proofs.length-1] : 0);
-		}
-		return p;
-	}
-	progs_read(prog, proof) {
-		const s = { s: prog };
-		skip_ws(s);
-		this.mult = (s.s[0] === '{');
-		if (!this.mult) {
-			this.progs.push(this.prog_read(s, proof));
-			return;
-		}
-		while (s.s.length > 0) {
-			skip_ws(s);
-			if (s.s[0] === '{') {
-				skip(s);
-				this.progs.push(this.prog_read(s, proof));
-			}
-			skip_ws(s);
-			if (s.s[0] !== '}') {
-				throw new Error(rbrace_expected);
-			} else {
-				skip(s);
-			}
-			skip_ws(s);
-		}
-	}
-}
-// removes comments
-function string_read_text(data) {
-	let s = '', skip = false;
-	for (let n = 0; n < data.length; n++) {
-		const c = data[n];
-		if (c === '#') skip = true;
-		else if (c === `\r` || c === `\n`) { skip = false; s += c; }
-		else if (!skip) s += c;
-	}
-	return s;
 }
 
 // loads string from stream
@@ -330,27 +274,22 @@ async function main() {
 	// s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
 	// s = "1 2. 2 1. ?x ?y :- ?y ?x.";
 	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
+	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
 	// unless s, read source from stdin
 	if (s === null) {
 		try {
 			process.stdin.setEncoding('utf8');
-			s = string_read_text(await load_stream(process.stdin));
+			s = await load_stream(process.stdin);
 		} catch (err) {   // stdin read error
 			console.log('Read error:', err);
 			return 4;
 		}
 	}
-	const proof = false;
-	const d = new driver();
-	try {
-		d.progs_read(s, proof); // parse source from s
-	} catch (err) {
-		console.log('Parse error:', err);
-		return 3;
-	}
+	const proof = process.argv.length === 4 && process.argv[2] === '-p';
+	const d = new driver(s, proof);
 	let r = false;
 	try {
-		r = d.pfp(proof);    // run pfp logic program
+		r = d.pfp(proof); // run pfp logic program
 	} catch (err) {
 		console.log('PFP error', err);
 		return 2;
@@ -362,4 +301,4 @@ async function main() {
 	return 0;
 }
 
-module.exports = { driver, string_read_text, load_stream, main, dict, lp };
+module.exports = { main, driver, lp };
