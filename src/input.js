@@ -14,18 +14,7 @@
 
 "use strict";
 
-//##ifdef DEBUG
-//##define DBG(x) x
-//##ifdef TRACE
-//##define TRC(x) __cout(x)
-//##else
-//##define TRC(x)
-//##endif
-//##include "__debug.js"
-//##else
-//##define DBG(x)
-//##define TRC(x)
-//##endif
+//## include "__common.h"
 
 const isalnum = c => {
 	return /[\d\w]/.test(c) ||/\p{L}/u.test(c);
@@ -34,8 +23,8 @@ const isalpha = c => {
 	return !(/\d/.test(c)) && (/\w/.test(c) || /\p{L}/u.test(c));
 }
 // skip_ws or skip 1 or more characters from parsing input
-const skip = (s, n = 1)  => { s.s = s.s.slice(n); s.p += n; }
-const skip_ws = s           => {
+const skip = (s, n = 1) => { s.s = s.s.slice(n); s.p += n; }
+const skip_ws = s => {
 	const sl = s.s.length;
 	s.s = s.s.replace(/^\s+/, '');
 	s.p += sl - s.s.length;

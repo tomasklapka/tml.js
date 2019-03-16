@@ -36,9 +36,10 @@ tml.min.js: tml.js
 tml.map.js: tml.js
 tml.js: tml.wmap.js
 	${EXORCIST} ${BROWSER_DIR}tml.map.js < ${BROWSER_DIR}tml.wmap.js > ${BROWSER_DIR}tml.js
-tml.wmap.js: node_modules build
-	${MKDIR_P} ${BROWSER_DIR}
+tml.wmap.js: node_modules build browser_dir
 	${BROWSERIFY} ${BROWSERIFYFLAGS} > ${BROWSER_DIR}tml.wmap.js
+browser_dir:
+	${MKDIR_P} ${BROWSER_DIR}
 
 # browser with debug
 tml.debug.min.js: tml.debug.js
@@ -46,8 +47,7 @@ tml.debug.min.js: tml.debug.js
 tml.debug.map.js: tml.debug.js
 tml.debug.js: tml.debug.wmap.js
 	${EXORCIST} ${BROWSER_DIR}tml.debug.map.js < ${BROWSER_DIR}tml.wmap.js > ${BROWSER_DIR}tml.debug.js
-tml.debug.wmap.js: node_modules debug
-	${MKDIR_P} ${BROWSER_DIR}
+tml.debug.wmap.js: node_modules debug browser_dir
 	${BROWSERIFY} ${BROWSERIFYDEBUGFLAGS} > ${BROWSER_DIR}tml.debug.wmap.js
 
 # build

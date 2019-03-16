@@ -14,20 +14,10 @@
 
 "use strict";
 
-//##ifdef DEBUG
-//##define DBG(x) x
-//##ifdef TRACE
-//##define TRC(x) __cout(x)
-//##else
-//##define TRC(x)
-//##endif
-//##include "__debug.js"
-// fn call counters
+//## include "__common.h"
+//## ifdef DEBUG
 const __counters = { lp: 0, from_int: 0, from_range: 0, from_arg: 0 };
-//##else
-//##define DBG(x)
-//##define TRC(x)
-//##endif
+//## endif
 
 const { err_proof } = require('./messages');
 const { bdds } = require('./bdds');
@@ -36,7 +26,7 @@ const bdd = new bdds();
 const pad = 0;
 
 function from_range(max, bits, offset, r) {
-	DBG()//const id = ++__counters.from_range);
+	ID(from_range);
 	TRC(`from_range-${id}`);
 	let x = bdds.F;
 	for (let n = 1; n != max; ++n) {
@@ -76,7 +66,7 @@ class rule_body {
 	}
 
 	from_arg(vij, j, bits, dsz, m) {
-		DBG()//const id = ++__counters.from_arg);
+		ID(from_arg);
 		TRC(`from_arg-${id}`);
 		const eq = [];
 		if (vij >= 0) {
@@ -104,7 +94,7 @@ class rule_body {
 	}
 
 	varbdd(db, p) {
-		DBG(__varbdd(`varbdd(db: ${db} p:${p} this:${this})`));
+		DBG(__varbdd(`varbdd(db: ${db} p:`, p, `this:`, this));
 		const sb = this.neg ? p.neg : p.pos;
 		const key = this.sel+'.'+this.ex.join(',');
 		if (sb.hasOwnProperty(key)) {
@@ -246,7 +236,7 @@ class rule {
 // [pfp] logic program
 class lp {
 	constructor(maxbits, arity, dsz) {
-		DBG()//this.__id = ++__counters.lp);
+		ID(lp);
 		this.bdd = bdd; // keep link to the bdd
 		this.db = bdds.F;
 		this.rules = [];     // p-datalog rules

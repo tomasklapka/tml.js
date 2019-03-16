@@ -14,18 +14,7 @@
 
 "use strict";
 
-//##ifdef DEBUG
-//##define DBG(x) x
-//##ifdef TRACE
-//##define TRC(x) __cout(x)
-//##else
-//##define TRC(x)
-//##endif
-//##include "__debug.js"
-//##else
-//##define DBG(x)
-//##define TRC(x)
-//##endif
+//## include "__common.h"
 
 const { etype, raw_progs } = require('./input');
 const { bdds } = require('./bdds');
@@ -110,11 +99,11 @@ class driver {
 		if (typeof(s) === 'number') {     // if s is number
 			if (s < this.syms.length) {
 				const r = s < 0 ? this.vars[-s] : this.syms[s];
-				DBG(__dict(`dict_get(${s}) by id = ${r}`))
+				DBG(__dict(`get(${s}) by id = ${r}`))
 				return r;
 			}
 			const r = s - this.syms.length;
-			DBG(__dict(`dict_get(${s}) number = ${r}`))
+			DBG(__dict(`get(${s}) number = ${r}`))
 			return r;                 //     return symbol by index
 		}
 		if (!s || !s.length) return pad;
@@ -122,20 +111,20 @@ class driver {
 		if (s[0] === '?') {               // if s is variable
 			const p = this.vars.indexOf(s);
 			if (p >= 0) {             //     if variable already in dict
-				DBG(__dict(`dict_get(${s}) variable = -${p}`));
+				DBG(__dict(`get(${s}) variable = -${p}`));
 				return -p;        //        return its index negated
 			}
 			this.vars.push(s);        //     else store the variable in dict
-			DBG(__dict(`dict_get(${s}) variable = -${this.vars.length-1} (created)`))
+			DBG(__dict(`get(${s}) variable = -${this.vars.length-1} (created)`))
 			return -(this.vars.length-1); //     and return its index negated
 		}
 		const p = this.syms.indexOf(s);   // if s is symbol
 		if (p >= 0) {                     //     if is symbol in dict
-			DBG(__dict(`dict_get(${s}) symbol = ${p}`))
+			DBG(__dict(`get(${s}) symbol = ${p}`))
 			return p;                 //         return its index
 		}
 		this.syms.push(s);                //     else store the symbol in dict
-		DBG(__dict(`dict_get(${s}) symbol = ${this.syms.length-1} (created)`))
+		DBG(__dict(`get(${s}) symbol = ${this.syms.length-1} (created)`))
 		return this.syms.length-1;        //         and return its index
 	}
 
