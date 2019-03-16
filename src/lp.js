@@ -94,7 +94,7 @@ class rule_body {
 	}
 
 	varbdd(db, p) {
-		DBG(__varbdd(`varbdd(db: ${db} p:`, p, `this:`, this));
+		DBG(__varbdd(`varbdd(db: ${db} p:`, p, `this:`, this, `)`));
 		const sb = this.neg ? p.neg : p.pos;
 		const key = this.sel+'.'+this.ex.join(',');
 		if (sb.hasOwnProperty(key)) {
