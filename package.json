@@ -9,18 +9,7 @@
   },
   "scripts": {
     "start": ".bin/tml.js",
-    "test": "node_modules/.bin/mocha test",
-    "strip_debug": "scripts/strip_debug",
-    "bundle": "node_modules/.bin/browserify --ignore debug -r ./index.js:tml -d > dist/tml.wmap.js",
-    "bundle_debug": "node_modules/.bin/browserify -r debug -r ./debug.js:tml -d > dist/tml.debug.wmap.js",
-    "exorcist": "cat dist/tml.wmap.js | node_modules/.bin/exorcist dist/tml.js.map.js > dist/tml.js",
-    "exorcist_debug": "cat dist/tml.debug.wmap.js | node_modules/.bin/exorcist dist/tml.debug.js.map.js > dist/tml.debug.js",
-    "minify": "node_modules/.bin/terser dist/tml.js > dist/tml.min.js",
-    "minify_debug": "node_modules/.bin/terser dist/tml.debug.js > dist/tml.debug.min.js",
-    "build": "npm run-script strip_debug && mkdir -p dist && npm run-script bundle && npm run-script exorcist && npm run-script minify",
-    "build_debug": "mkdir -p dist && npm run-script bundle_debug && npm run-script exorcist_debug && npm run-script minify_debug",
-    "build_npm": "npm run-script strip_debug",
-    "build_all": "npm run-script build_debug && npm run-script build"
+    "test": "node_modules/.bin/mocha test"
   },
   "dependencies": {
     "debug": "^4.1.1"

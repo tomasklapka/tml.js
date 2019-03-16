@@ -14,33 +14,30 @@
 
 "use strict";
 
-const { bdds } = require('./bdds')();
+//##ifdef DEBUG
+//##define DBG(x) x
+//##ifdef TRACE
+//##define TRC(x) __cout(x)
+//##else
+//##define TRC(x)
+//##endif
+//##include "__debug.js"
+// fn call counters
+const __counters = { lp: 0, from_int: 0, from_range: 0, from_arg: 0 };
+//##else
+//##define DBG(x)
+//##define TRC(x)
+//##endif
 
-// debug functions
-const _dbg_pfp     = require('debug')('tml:pfp');
-const _dbg_varbdd  = require('debug')('tml:pfp:varbdd');
-const _dbg_rule    = require('debug')('tml:pfp:rule');
-const _dbg_fn_enter = (...a) => 0; //console.log(...a);
-
-// internal counter for lps (lp._id)
-const _counters = { lp: 0, from_int: 0, from_range: 0, from_arg: 0 };
-
-const pad = 0;
-
-// messages
-const err_proof = `proof extraction yet unsupported for programs ` +
-	`with negation or deletion.`;
+const { err_proof } = require('./messages');
+const { bdds } = require('./bdds');
 
 const bdd = new bdds();
-
-// function from_eq(src, dst, l, r) {
-// 	while (l--) r = bdd.and(r, bdd.from_eq(src + l, dst + l));
-// 	return r;
-// }
+const pad = 0;
 
 function from_range(max, bits, offset, r) {
-	const id = ++_counters.from_range;
-	_dbg_fn_enter(`from_range-${id}`);
+	DBG()//const id = ++__counters.from_range);
+	TRC(`from_range-${id}`);
 	let x = bdds.F;
 	for (let n = 1; n != max; ++n) {
 		x = bdd.or(x, bdd.from_int(n, bits, offset));
@@ -70,17 +67,17 @@ class rule_body {
 			this.perm[b] = b;
 		}
 		const m = {};
-		_dbg_rule(`rb1`);
+		DBG(__rule(`rb1`));
 		for (let j = 0; j != ar; ++j) {
-			_dbg_rule(`rbj`, j);
+			DBG(__rule(`rbj`, j));
 			this.from_arg(t[j], j, bits, dsz, m)
 		}
-		_dbg_rule(`rb2`);
+		DBG(__rule(`rb2`));
 	}
 
 	from_arg(vij, j, bits, dsz, m) {
-		const id = ++_counters.from_arg;
-		_dbg_fn_enter(`from_arg-${id}`);
+		DBG()//const id = ++__counters.from_arg);
+		TRC(`from_arg-${id}`);
 		const eq = [];
 		if (vij >= 0) {
 			this.ex.fill(true, j * bits, (j+1) * bits);
@@ -107,12 +104,12 @@ class rule_body {
 	}
 
 	varbdd(db, p) {
-		_dbg_varbdd(`varbdd(db: ${db}, p:`, p, `this:`, this);
+		DBG(__varbdd(`varbdd(db: ${db} p:${p} this:${this})`));
 		const sb = this.neg ? p.neg : p.pos;
 		const key = this.sel+'.'+this.ex.join(',');
 		if (sb.hasOwnProperty(key)) {
 			const res = bdd.permute(sb[key], this.perm);
-			_dbg_varbdd(`varbdd key = ${key} res =`, res);
+			DBG(__varbdd(`varbdd key = ${key} res =`, res));
 			return res;
 		}
 		let r = this.neg
@@ -126,7 +123,7 @@ class rule_body {
 		r = bdd.ex(r, this.ex);
 		sb[key] = r;
 		const res = bdd.permute(r, this.perm);
-		_dbg_varbdd("varbdd res =", res);
+		DBG(__varbdd("varbdd res =", res));
 		return res;
 	};
 }
@@ -135,7 +132,7 @@ class rule_body {
 class rule {
 	// initialize rule
 	constructor(v, bits, dsz, proof) {
-		_dbg_rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v);
+		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
 		this.hsym = bdds.T;
 		this.proof_arity = 0;
 		this.sels = [];
@@ -172,12 +169,12 @@ class rule {
 				this.eqs[e],
 				bdd.from_eq(heq[j][0], heq[j][1]));
 		}
-		_dbg_rule(`2`, v);
+		DBG(__rule(`2`, v));
 		for (let i = 0; i != v.length-1; ++i) {
-			_dbg_rule('i', i);
+			DBG(__rule('i', i));
 			for (let j = 0; j != ar; ++j) {
-				_dbg_rule('j', j);
-				_dbg_rule('v[i+1][j]', v[i+1][j]);
+				DBG(__rule('j', j));
+				DBG(__rule('v[i+1][j]', v[i+1][j]));
 				if (v[i+1][j] < 0) {
 					if (!m.hasOwnProperty(v[i+1][j])) {
 						m[v[i+1][j]] = k++;
@@ -217,7 +214,7 @@ class rule {
 	}
 
 	fwd(db, bits, ar, s, p) {
-		_dbg_pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`,s,`p:`,p,`)`);
+		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`,s,`p:`,p,`)`));
 		let vars = bdds.T;
 		for (let i = 0; i < this.bd.length; i++) {
 			vars = bdd.and(vars, this.bd[i].varbdd(db, s));
@@ -229,7 +226,7 @@ class rule {
 		}
 		vars = bdd.and(vars, this.hsym);
 		if (p && !this.p.includes(vars)) this.p.push(vars);
-		_dbg_pfp(`rule.fwd 5 vars`, vars);
+		DBG(__pfp(`rule.fwd 5 vars`, vars));
 		return bdd.deltail(vars, bits * ar);
 	}
 
@@ -249,7 +246,7 @@ class rule {
 // [pfp] logic program
 class lp {
 	constructor(maxbits, arity, dsz) {
-		this._id = ++_counters.lp;
+		DBG()//this.__id = ++__counters.lp);
 		this.bdd = bdd; // keep link to the bdd
 		this.db = bdds.F;
 		this.rules = [];     // p-datalog rules
@@ -265,27 +262,27 @@ class lp {
 	getdb() { return this.getbdd(this.db); }
 	// single pfp step
 	rule_add(x, proof) {
-		_dbg_rule(`rule_add() x:`, x, this.bits, this.dsz, proof);
+		DBG(__rule(`rule_add() x:`, x, this.bits, this.dsz, proof));
 		if (x.length === 1) {
-			_dbg_rule('rule_add fact');
+			DBG(__rule('rule_add fact'));
 			const r = new rule(x, this.bits, this.dsz, false);
 			this.db = bdd.or(this.db, r.hsym); // fact
 		} else {
-			_dbg_rule('rule_add rule');
+			DBG(__rule('rule_add rule'));
 			const r = new rule(x, this.bits, this.dsz, proof);
 			this.rules.push(r);
 		}
 	}
 
 	fwd(add, del, proof) {
-		_dbg_pfp(`lp.fwd(add: ${add.add}, del: ${del.del}, proof: `,proof,`)`)
+		DBG(__pfp(`lp.fwd(add: ${add.add}, del: ${del.del}, proof: `,proof,`)`))
 		this.p.pos = {}; this.p.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
 			const t = bdd.or(
 				r.fwd(this.db, this.bits, this.ar, this.p, proof),
 				r.neg ? del.del : add.add);
-			_dbg_pfp(`lp.fwd...i:${i} t:${t}`);
+			DBG(__pfp(`lp.fwd...i:${i} t:${t}`));
 			if (r.neg) { del.del = t; } else { add.add = t; }
 		}
 	}

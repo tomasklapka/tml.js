@@ -14,37 +14,24 @@
 
 "use strict";
 
-// debug functions
-const _dbg_parser  = require('debug')('tml:parser');
-
-// messages
-const dot_expected      = "'.' expected.\n";
-const sep_expected      = "Term or ':-' or '.' expected.\n";
-const unmatched_quotes  = "Unmatched \"\n";
-const err_inrel         = "Unable to read the input relation symbol.\n";
-const err_src           = "Unable to read src file.\n";
-const err_dst           = "Unable to read dst file.\n";
-const err_quotes        = "expected \".\n";
-const err_dots          = "two consecutive dots, or dot in beginning of document.\n";
-const err_quote         = "' should come before and after a single character only.\n";
-const err_fname         = "malformed filename.\n";
-const err_directive_arg = "invalid directive argument.\n";
-const err_escape        = "invalid escaped character\n";
-const err_int           = "malformed int.\n";
-const err_lex           = "lexer error (please report as a bug).\n";
-const err_parse         = "parser error (please report as a bug).\n";
-const err_chr           = "unexpected character.\n";
-const err_body          = "rules' body expected.\n";
-const err_term_or_dot   = "term or dot expected.\n";
-const err_close_curly   = "'}' expected.\n";
-const err_fnf           = "file not found.\n";
-
+//##ifdef DEBUG
+//##define DBG(x) x
+//##ifdef TRACE
+//##define TRC(x) __cout(x)
+//##else
+//##define TRC(x)
+//##endif
+//##include "__debug.js"
+//##else
+//##define DBG(x)
+//##define TRC(x)
+//##endif
 
 const isalnum = c => {
-	return /\p{L}/u.test(c);
+	return /[\d\w]/.test(c) ||/\p{L}/u.test(c);
 }
 const isalpha = c => {
-	return !/\d/.test(c) && /\p{L}/u.test(c);
+	return !(/\d/.test(c)) && (/\w/.test(c) || /\p{L}/u.test(c));
 }
 // skip_ws or skip 1 or more characters from parsing input
 const skip = (s, n = 1)  => { s.s = s.s.slice(n); s.p += n; }
@@ -140,7 +127,7 @@ const etype = Object.freeze({ SYM: 0, NUM: 1, CHR: 2, VAR: 3 });
 
 class elem {
 	parse(l, pos) {
-		_dbg_parser(`elem.parse(${l[pos.pos]})`);
+		DBG(__parser(`elem.parse(${l[pos.pos]})`));
 		const p = pos.pos;
 		if (!isalnum(l[p] &&
 			"'-?".indexOf(l[p]) !== -1)) return false;
@@ -229,52 +216,6 @@ class raw_progs {
 		}
 	}
 }
-// 	prog_create(r, proof) {
-// 		let ar = 0;
-// 		for (let i = 0; i != r.length; ++i ) {
-// 			for (let j = 0; j != r[i].length; ++j) {
-// 				ar = Math.max(ar, r[i][j].length - 1);
-// 			}
-// 		}
-// 		const p = new lp(this.d.bits, ar, this.d.nsyms);
-// 		_dbg_parser(`p.ruleadd.... rules:`, r);
-// 		for (let i = 0; i != r.length; i++) {
-// 			for (let j = 0; j < r[i].length; j++) {
-// 				const l = r[i][j].length;
-// 				if (l < ar+1) {
-// 					r[i][j] = r[i][j].concat(Array(ar + 1 - l).fill(dict.pad));
-// 				}
-// 			}
-// 			_dbg_parser(`p.rule_add(r[${i}]):`, r[i]);
-// 			p.rule_add(r[i], proof ? this.proofs[this.proofs.length-1] : 0);
-// 		}
-// 		return p;
-// 	}
-// 	progs_read(prog, proof) {
-// 		const s = { s: prog };
-// 		skip_ws(s);
-// 		this.mult = (s.s[0] === '{');
-// 		if (!this.mult) {
-// 			this.progs.push(this.prog_read(s, proof));
-// 			return;
-// 		}
-// 		while (s.s.length > 0) {
-// 			skip_ws(s);
-// 			if (s.s[0] === '{') {
-// 				skip(s);
-// 				this.progs.push(this.prog_read(s, proof));
-// 			}
-// 			skip_ws(s);
-// 			if (s.s[0] !== '}') {
-// 				throw new Error(rbrace_expected);
-// 			} else {
-// 				skip(s);
-// 			}
-// 			skip_ws(s);
-// 		}
-// 	}
-// }
-
 // removes comments
 function string_read_text(data) {
 	let s = '', skip = false;
@@ -286,7 +227,6 @@ function string_read_text(data) {
 	}
 	return s;
 }
-
 // read prog from file
 function file_read_text(fname) {
 	const { readFileSync } = require('fs');

@@ -14,32 +14,24 @@
 
 "use strict";
 
-// DEFAULT OPTIONS
-const options = {
-	memoization: false
-}
-
-// debug functions
-const _dbg_bdd         = require('debug')('tml:bdd');
-const _dbg_add         = require('debug')('tml:bdd:add');
-const _dbg_leaf        = require('debug')('tml:bdd:leaf');
-const _dbg_or          = require('debug')('tml:bdd:or');
-const _dbg_ex          = require('debug')('tml:bdd:ex');
-const _dbg_and         = require('debug')('tml:bdd:and');
-const _dbg_deltail     = require('debug')('tml:bdd:deltail');
-const _dbg_and_deltail = require('debug')('tml:bdd:and_deltail');
-//const _dbg_and_many    = require('debug')('tml:bdd:and_many');
-//const _dbg_and_ex      = require('debug')('tml:bdd:and_ex');
-const _dbg_and_not     = require('debug')('tml:bdd:and_not');
-//const _dbg_and_not_ex  = require('debug')('tml:bdd:and_not_ex');
-const _dbg_permute     = require('debug')('tml:bdd:permute');
-const _dbg_ite         = require('debug')('tml:bdd:ite');
-const _dbg_fn_enter    = (...a) => 0; //console.log(...a);
-
-// internal counters for apply calls
-const _counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
+//##ifdef DEBUG
+//##define DBG(x) x
+//##ifdef TRACE
+//##define TRC(x) __cout(x)
+//##else
+//##define TRC(x)
+//##endif
+//##include "__debug.js"
+// fn call counters
+const __counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
 	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0,
 	sat: 0, add_nocheck: 0 };
+//##else
+//##define DBG(x)
+//##define TRC(x)
+//##endif
+
+////##define MEMO
 
 // node in a bdd tree
 class node {
@@ -64,7 +56,7 @@ class bdds {
 	get length() { return this.V.length; }
 	// initialize bdds
 	constructor() {
-		this._id = ++_counters.bdds;
+		this._id = ++__counters.bdds;
 		this.V = [];          // all nodes
 		this.M = {};          // node to its index
 		// initialize bdd with 0 and 1 terminals
@@ -78,9 +70,9 @@ class bdds {
 		let r = 0;
 		if (bdds.leaf(n)) return bdds.trueleaf(n) ? 1 : 0;
 		k = this.getnode(n.hi);
-		r += this.count(n.hi, nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		r += this.count(n.hi, nvars)*(1<<(((bdds.leaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
 		k = getnode(n[2]);
-		r += count(n[2], nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		r += count(n[2], nvars)*(1<<(((bdds.leaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
 		return r;
 	}
 	count(x, nvars) {
@@ -106,8 +98,8 @@ class bdds {
 	}
 
 	from_int(x, bits, offset) {
-		const id = ++_counters.from_int;
-		_dbg_fn_enter(`from_int-${id}`);
+		DBG()//const id = ++__counters.from_int);
+		TRC(`from_int-${id}`);
 		let r = bdds.T;
 		let b = bits--;
 		while (b--) r = this.and(r, this.from_bit(bits - b + offset, x & (1 << b)));
@@ -123,8 +115,8 @@ class bdds {
 
 	// add node directly without checking
 	add_nocheck(n) {
-		const id = ++_counters.add_nocheck;
-		_dbg_fn_enter(`add_nocheck-${id}`);
+		DBG()//const id = ++__counters.add_nocheck);
+		TRC(`add_nocheck-${id}`);
 		const r = this.V.length;
 		this.M[n.key] = r;
 		this.V.push(n);
@@ -137,7 +129,7 @@ class bdds {
 		const res = n instanceof node
 			? n.v === 0
 			: n === bdds.T || n === bdds.F;
-		_dbg_leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`);
+		DBG(__leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`));
 		return res;
 	}
 	// checks if node is terminal and is T
@@ -145,7 +137,7 @@ class bdds {
 		const res = n instanceof node
 			? bdds.leaf(n) && (n.hi > 0)
 			: n === bdds.T;
-		_dbg_leaf(`leaf ${n instanceof node ? n.key : n} is ${res}`);
+		DBG(__leaf(`leaf ${n instanceof node ? n.key : n} is ${res}`));
 		return res;
 	}
 
@@ -154,28 +146,29 @@ class bdds {
 			? new node(x + 1, bdds.T, bdds.F)
 			: new node(x + 1, bdds.F, bdds.T);
 		const res = this.add(n);
-		_dbg_bdd(`from_bit x:${x}, v:${v}, n:${n.key}, res:${res}`);
+		DBG(__bdd(`from_bit x:${x}, v:${v}, n:${n.key}, res:${res}`));
 		return res;
 	}
 	// adds new node
 	add(n) {
-		const id = ++_counters.add;
-		_dbg_fn_enter(`add-${id}`); _dbg_add(`add-${id} (${n.key})`);
+		DBG()//const id = ++__counters.add);
+		DBG(__add(`add-${id} (${n.key})`));
+		TRC(`add-${id}`);
 		let r = null;
-		let _dbg = '';
+		DBG()//let __dbg = '');
 		do {
-			if (n.hi === n.lo) { r = n.hi; _dbg = 'hi === lo'; break; }
+			if (n.hi === n.lo) { r = n.hi; DBG(__dbg = 'hi === lo'); break; }
 			if (this.M.hasOwnProperty(n.key)) { r = this.M[n.key]; break; }
 			r = this.add_nocheck(n);
-			_dbg = ' nocheck';
+			DBG(__dbg = ' nocheck');
 		} while (0);
-		_dbg_add(`/add-${id} ${r} (${n.key})${_dbg}`);
+		DBG(__add(`/add-${id} ${r} (${n.key})${__dbg}`));
 		return r;
 	}
 
 	sat(v, nvars, n, p, r) {
-		const id = ++_counters.sat;
-		_dbg_fn_enter(`sat-${id}`);
+		DBG()//const id = ++__counters.sat);
+		TRC(`sat-${id}`);
 		if (bdds.leaf(n) && !bdds.trueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
@@ -201,29 +194,29 @@ class bdds {
 	}
 
 	or(x, y) {
-		const or_id = ++_counters.or;
-		_dbg_fn_enter(`or-${or_id} (${x} or ${y})`);
+		DBG()//const id = ++__counters.or);
+		TRC(`or-${id} (${x} or ${y})`);
 		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = x+'.'+y;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_or.hasOwnProperty(t)) {
-				_dbg_or(`/or-${or_id} ${this.memo_or[t]} (${x} or1 ${y}) (memo:${t})`);
-				return this.memo_or[t];
-			}
+//##ifdef MEMO
+		t = x+'.'+y;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_or.hasOwnProperty(t)) {
+			DBG(__or(`/or-${id} ${this.memo_or[t]} (${x} or1 ${y}) (memo:${t})`));
+			return this.memo_or[t];
 		}
+//##endif
 		const xn = this.getnode(x).clone();
 		if (bdds.leaf(xn)) {
 			const r = bdds.trueleaf(xn) ? bdds.T : y;
-			_dbg_or(`/or-${or_id} ${r} (${x} or2 ${y}) xn is leaf`);
+			DBG(__or(`/or-${id} ${r} (${x} or2 ${y}) xn is leaf`));
 			return apply_ret(r, this.memo_or);
 		}
 		const yn = this.getnode(y).clone();
 		if (bdds.leaf(yn)) {
 			const r = bdds.trueleaf(yn) ? bdds.T : x;
-			_dbg_or(`/or-${or_id} ${r} (${x} or3 ${y}) yn is leaf`);
+			DBG(__or(`/or-${id} ${r} (${x} or3 ${y}) yn is leaf`));
 			return apply_ret(r, this.memo_or);
 		}
 		let v;
@@ -235,7 +228,7 @@ class bdds {
 		} else {
 			if (xn.v === 0) {
 				const r = (a && b) ? bdds.T : bdds.F;
-				_dbg_or(`/or-${or_id} ${r} (${x} or4 ${y})`);
+				DBG(__or(`/or-${id} ${r} (${x} or4 ${y})`));
 				return apply_ret(r, this.memo_or);
 			} else {
 				v = xn.v;
@@ -248,32 +241,32 @@ class bdds {
 		const hi  = this.or(xn.hi, yn.hi);
 		const lo = this.or(xn.lo, yn.lo);
 		const r = this.add(new node(v, hi, lo));
-		_dbg_or(`/or-${or_id} ${r} (${x} or5 ${y})`);
+		DBG(__or(`/or-${id} ${r} (${x} or5 ${y})`));
 		return apply_ret(r, this.memo_or);
 	}
 
 	ex(x, b) {
-		const ex_id = ++_counters.ex;
-		_dbg_fn_enter(`ex-${ex_id} (${x} ex ${b.map(n=>n?'1':'0').join('')})`);
+		DBG()//const id = ++__counters.ex);
+		TRC(`ex-${id} (${x} ex ${b.map(n=>n?'1':'0').join('')})`);
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = x+'.'+b.join(',');
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_ex.hasOwnProperty(t)) {
-				_dbg_ex(`/ex(${ex_id}) ${this.memo_ex[t]} (${x} ex1 ${b.map(n=>n?'1':'0').join('')}) (memo:${t})`);
-				return this.memo_ex[t];
-			}
+//##ifdef MEMO
+		t = x+'.'+b.join(',');
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_ex.hasOwnProperty(t)) {
+			DBG(__ex(`/ex(${id}) ${this.memo_ex[t]} (${x} ex1 ${b.map(n=>n?'1':'0').join('')}) (memo:${t})`));
+			return this.memo_ex[t];
 		}
+//##endif
 		if (bdds.leaf(x)) {
-			_dbg_ex(`/ex-${ex_id} ${x} (${x} ex2 ${b.map(n=>n?'1':'0').join('')}) x is leaf`);
+			DBG(__ex(`/ex-${id} ${x} (${x} ex2 ${b.map(n=>n?'1':'0').join('')}) x is leaf`));
 			return x;
 		}
 		let n = this.getnode(x);
 		while (b[n.v-1] === true || b[n.v-1] > 0) {
 			x = this.or(n.hi, n.lo);
 			if (bdds.leaf(x)) {
-				_dbg_ex(`/ex-${ex_id} ${x} (${x} ex3 ${b.map(n=>n?'1':'0').join('')}) x is leaf2`);
+				DBG(__ex(`/ex-${id} ${x} (${x} ex3 ${b.map(n=>n?'1':'0').join('')}) x is leaf2`));
 				return apply_ret(x, this.memo_ex);
 			}
 			n = this.getnode(x);
@@ -282,34 +275,34 @@ class bdds {
 		const lo = this.ex(n.lo, b);
 		const nn = new node(n.v, hi, lo);
 		const r = this.add(nn);
-		_dbg_ex(`/ex-${ex_id} ${r} (${r} ex4 ${b.map(n=>n?'1':'0').join('')}) n:${nn.key}`);
+		DBG(__ex(`/ex-${id} ${r} (${r} ex4 ${b.map(n=>n?'1':'0').join('')}) n:${nn.key}`));
 		return apply_ret(r, this.memo_ex);
 	}
 
 	and(x, y) {
-		const and_id = ++_counters.and;
-		_dbg_fn_enter(`and-${and_id} (${x} and ${y})`);
+		DBG()//const id = ++__counters.and);
+		TRC(`and-${id} (${x} and ${y})`);
 		if (x === y) return x;
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = `${x}.${y}`;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_and.hasOwnProperty(t)) {
-				_dbg_and(`/and-${and_id} ${this.memo_and[t]} (${x} and1 ${y}) (memo:${t})`);
-				return this.memo_and[t];
-			}
+//##ifdef MEMO
+		t = `${x}.${y}`;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_and.hasOwnProperty(t)) {
+			DBG(__and(`/and-${id} ${this.memo_and[t]} (${x} and1 ${y}) (memo:${t})`));
+			return this.memo_and[t];
 		}
+//##endif
 		const xn = this.getnode(x).clone();
 		if (bdds.leaf(xn)) {
 			const r = bdds.trueleaf(xn) ? y : bdds.F;
-			_dbg_and(`/and-${and_id} ${r} (${x} and2 ${y}) xn is leaf`);
+			DBG(__and(`/and-${id} ${r} (${x} and2 ${y}) xn is leaf`));
 			return apply_ret(r, this.memo_and);
 		}
 		const yn = this.getnode(y).clone();
 		if (bdds.leaf(yn)) {
 			const r = !bdds.trueleaf(yn) ? bdds.F : x;
-			_dbg_and(`/and-${and_id} ${r} (${x} and3 ${y}) yn is leaf`);
+			DBG(__and(`/and-${id} ${r} (${x} and3 ${y}) yn is leaf`));
 			return apply_ret(r, this.memo_and);
 		}
 		let v;
@@ -321,7 +314,7 @@ class bdds {
 		} else {
 			if (xn.v === 0) {
 				const r = (a && b) ? bdds.T : bdds.F;
-				_dbg_and(`/and-${and_id} ${r} (${x} and4 ${y})`);
+				DBG(__and(`/and-${id} ${r} (${x} and4 ${y})`));
 				return apply_ret(r, this.memo_and);
 			} else {
 				v = xn.v;
@@ -334,33 +327,33 @@ class bdds {
 		const hi  = this.and(xn.hi, yn.hi);
 		const lo = this.and(xn.lo, yn.lo);
 		const r = this.add(new node(v, hi, lo));
-		_dbg_and(`/and-${and_id} ${r} (${x} and5 ${y})`);
+		DBG(__and(`/and-${id} ${r} (${x} and5 ${y})`));
 		return apply_ret(r, this.memo_and);
 	}
 
 	and_not(x, y) {
-		const and_not_id = ++_counters.and_not;
-		_dbg_fn_enter(`and_not-${and_not_id} (${x} and_not ${y})`);
+		DBG()//const id = ++__counters.and_not);
+		TRC(`and_not-${id} (${x} and_not ${y})`);
 		if (x === y) return bdds.F;
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = x+'.'+y;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_and_not.hasOwnProperty(t)) {
-				_dbg_and_not(`/and_not-${and_not_id} ${this.memo_and_not[t]} (${x} and not1 ${y}) (memo:${t})`);
-				return this.memo_and_not[t];
-			}
+//##ifdef MEMO
+		t = x+'.'+y;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_and_not.hasOwnProperty(t)) {
+			DBG(__and_not(`/and_not-${id} ${this.memo_and_not[t]} (${x} and not1 ${y}) (memo:${t})`));
+			return this.memo_and_not[t];
 		}
+//##endif
 		const xn = this.getnode(x).clone();
 		if (bdds.leaf(xn) && !bdds.trueleaf(xn)) {
-			_dbg_and_not(`/and_not-${and_not_id} 0 (${x} and not2 ${y}) xn is leaf`);
+			DBG(__and_not(`/and_not-${id} 0 (${x} and not2 ${y}) xn is leaf`));
 			return apply_ret(bdds.F, this.memo_and_not);
 		}
 		const yn = this.getnode(y).clone();
 		if (bdds.leaf(yn)) {
 			const r = bdds.trueleaf(yn) ? bdds.F : x;
-			_dbg_and_not(`/and_not-${and_not_id} ${r} (${x} and not3 ${y}) yn is leaf`);
+			DBG(__and_not(`/and_not-${id} ${r} (${x} and not3 ${y}) yn is leaf`));
 			return apply_ret(r, this.memo_and_not);
 		}
 		let v;
@@ -372,7 +365,7 @@ class bdds {
 		} else {
 			if (xn.v === 0) {
 				const r = (a && !b) ? bdds.T : bdds.F;
-				_dbg_and_not(`/and_not-${and_not_id} ${r} (${x} and not4 ${y})`);
+				DBG(__and_not(`/and_not-${id} ${r} (${x} and not4 ${y})`));
 				return apply_ret(r, this.memo_and_not);
 			} else {
 				v = xn.v;
@@ -385,64 +378,64 @@ class bdds {
 		const hi = this.and_not(xn.hi, yn.hi);
 		const lo = this.and_not(xn.lo, yn.lo);
 		const r = this.add(new node(v, hi, lo));
-		_dbg_and_not(`/and_not-${and_not_id} ${r} (${x} and not5 ${y})`);
+		DBG(__and_not(`/and_not-${id} ${r} (${x} and not5 ${y})`));
 		return apply_ret(r, this.memo_and_not);
 	}
 
 	deltail(x, h) {
-		const deltail_id = ++_counters.deltail;
-		_dbg_fn_enter(`deltail-${deltail_id} (${x} deltail ${h})`);
+		DBG()//const id = ++__counters.deltail);
+		TRC(`deltail-${id} (${x} deltail ${h})`);
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = `${x}.${h}`;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_deltail.hasOwnProperty(t)) {
-				_dbg_deltail(`/deltail-${deltail_id} ${this.memo_deltail[t]} (${x}, ${h}) (memo:${t})`);
-				return this.memo_deltail[t];
-			}
+//##ifdef MEMO
+		t = `${x}.${h}`;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_deltail.hasOwnProperty(t)) {
+			DBG(__deltail(`/deltail-${id} ${this.memo_deltail[t]} (${x}, ${h}) (memo:${t})`));
+			return this.memo_deltail[t];
 		}
+//##endif
 		if (bdds.leaf(x)) {
-			_dbg_deltail(`/deltail-${deltail_id} ${x} (${x}, ${h}) leaf`);
+			DBG(__deltail(`/deltail-${id} ${x} (${x}, ${h}) leaf`));
 			return x;
 		}
 		const n = this.getnode(x).clone();
 		if (n.v > h) {
 			const r = n.hi === bdds.F && n.lo === bdds.F ? bdds.F : bdds.T;
-			_dbg_deltail(`/deltail-${deltail_id} ${r} (${x}, ${h}) (${n.v} > ${h}) n:${n.key}`);
+			DBG(__deltail(`/deltail-${id} ${r} (${x}, ${h}) (${n.v} > ${h}) n:${n.key}`));
 			return apply_ret(r, this.memo_deltail);
 		}
 		const hi = this.deltail(n.hi, h);
 		const lo = this.deltail(n.lo, h);
 		const r = this.add(new node(n.v, hi, lo));
-		_dbg_deltail(`/deltail-${deltail_id} ${r} (${x}, ${h}) (hi: ${hi}, lo: ${lo})`);
+		DBG(__deltail(`/deltail-${id} ${r} (${x}, ${h}) (hi: ${hi}, lo: ${lo})`));
 		return apply_ret(r, this.memo_deltail);
 	}
 
 	and_deltail(x, y, h) {
-		const and_deltail_id = ++_counters.and_deltail;
-		_dbg_fn_enter(`and_deltail-${and_deltail_id} (${x} and_deltail ${y}, ${h})`);
+		DBG()//const id = ++__counters.and_deltail);
+		TRC(`and_deltail-${id} (${x} and_deltail ${y}, ${h})`);
 		if (x === y) return this.deltail(x, h);
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = `${x}.${y}.${h}`;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_and_deltail.hasOwnProperty(t)) {
-				_dbg_and_deltail(`/and_deltail-${and_deltail_id} ${this.memo_and_deltail[t]} (${x} and_deltail1 ${y}, ${h}) (memo:${t})`);
-				return this.memo_and_deltail[t];
-			}
+//##ifdef MEMO
+		t = `${x}.${y}.${h}`;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_and_deltail.hasOwnProperty(t)) {
+			DBG(__and_deltail(`/and_deltail-${id} ${this.memo_and_deltail[t]} (${x} and_deltail1 ${y}, ${h}) (memo:${t})`));
+			return this.memo_and_deltail[t];
 		}
+//##endif
 		const xn = this.getnode(x).clone();
 		if (bdds.leaf(xn)) {
 			const r = bdds.trueleaf(xn) ? this.deltail(y, h) : bdds.F;
-			_dbg_and_deltail(`/and_deltail-${and_deltail_id} ${r} (${x} and_deltail2 ${y}, ${h}) xn is leaf`);
+			DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail2 ${y}, ${h}) xn is leaf`));
 			return apply_ret(r, this.memo_and_deltail);
 		}
 		const yn = this.getnode(y).clone();
 		if (bdds.leaf(yn)) {
 			const r = !bdds.trueleaf(yn) ? bdds.F : this.deltail(x, h);
-			_dbg_and_deltail(`/and_deltail-${and_deltail_id} ${r} (${x} and_deltail3 ${y}, ${h}) yn is leaf`);
+			DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail3 ${y}, ${h}) yn is leaf`));
 			return apply_ret(r, this.memo_and_deltail);
 		}
 		let v;
@@ -454,7 +447,7 @@ class bdds {
 		} else {
 			if (xn.v === 0) {
 				const r = (a && b) ? bdds.T : bdds.F;
-				_dbg_and_deltail(`/and_deltail-${and_deltail_id} ${r} (${x} and_deltail4 ${y}, ${h})`);
+				DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail4 ${y}, ${h})`));
 				return apply_ret(r, this.memo_and_deltail);
 			} else {
 				v = xn.v;
@@ -467,13 +460,13 @@ class bdds {
 		const hi  = this.and_deltail(xn.hi, yn.hi, h);
 		const lo = this.and_deltail(xn.lo, yn.lo, h);
 		const r = this.deltail(this.add(new node(v, hi, lo)), h);
-		_dbg_and_deltail(`/and_deltail-${and_deltail_id} ${r} (${x} and_deltail5 ${y}, ${h})`);
+		DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail5 ${y}, ${h})`));
 		return apply_ret(r, this.memo_and_deltail);
 	}
 
 	and_many(v) {
-		const id = ++_counters.and_many;
-		_dbg_fn_enter(`and_many-${id} (v:${v.join(',')})`);
+		DBG()//const id = ++__counters.and_many);
+		TRC(`and_many-${id} (v:${v.join(',')})`);
 		let from = 0;
 		if (1 === (v.length - from)) {
 			return v[from];
@@ -522,169 +515,54 @@ class bdds {
 		const lo = this.and_many(v2);
 		return this.add(new node(m, hi, lo));
 	}
-
-	// and_ex(x, y, s) {
-	// 	const and_ex_id = ++_counters.and_ex;
-	// 	_dbg_and_ex(`and_ex_id++ = ${and_ex_id} (${x} and_ex ${y}, ${s.join(',')})`);
-	// 	if (x === y) return this.ex(x, s);
-	// 	let t;
-	// 	let apply_ret = r => r;
-	// 	if (options.memoization) {
-	// 		t = `${x}.${y}.${s.join(',')}`;
-	// 		apply_ret = (r, m) => { m[t] = r; return r; }
-	// 		if (this.memo_and_ex.hasOwnProperty(t)) {
-	// 			_dbg_and_ex(`and_ex(${and_ex_id}) ${this.memo_and_ex[t]} (${x} and_ex1 ${y}, ${s.join(',')}) (memo:${t})`);
-	// 			return this.memo_and_ex[t];
-	// 		}
-	// 	}
-	// 	const xn = this.getnode(x).clone();
-	// 	if (bdds.leaf(xn)) {
-	// 		const r = bdds.trueleaf(xn) ? this.ex(y, s) : bdds.F;
-	// 		_dbg_and_ex(`and_ex(${and_ex_id}) ${r} (${x} and_ex2 ${y}, ${s.join(',')}) xn is leaf`);
-	// 		return apply_ret(r, this.memo_and_ex);
-	// 	}
-	// 	const yn = this.getnode(y).clone();
-	// 	if (bdds.leaf(yn)) {
-	// 		const r = !bdds.trueleaf(yn) ? bdds.F : this.ex(x, s);
-	// 		_dbg_and_ex(`and_ex(${and_ex_id}) ${r} (${x} and_ex3 ${y}, ${s.join(',')}) yn is leaf`);
-	// 		return apply_ret(r, this.memo_and_ex);
-	// 	}
-	// 	let v;
-	// 	if (((xn.v === 0) && (yn.v > 0))
-	// 	|| ((yn.v > 0) && (xn.v > yn.v))) {
-	// 		v = yn.v;
-	// 		xn.hi = x;
-	// 		xn.lo = x;
-	// 	} else {
-	// 		if (xn.v === 0) {
-	// 			const r = (a && b) ? bdds.T : bdds.F;
-	// 			_dbg_and_ex(`and_ex(${and_ex_id}) ${r} (${x} and_ex4 ${y}, ${s.join(',')})`);
-	// 			return apply_ret(r, this.memo_and_ex);
-	// 		} else {
-	// 			v = xn.v;
-	// 			if ((v < yn.v) || yn.v === 0) {
-	// 				yn.hi = y;
-	// 				yn.lo = y;
-	// 			}
-	// 		}
-	// 	}
-	// 	let r;
-	// 	if (s[v-1] === true || s[v-1] > 0) {
-	// 		const lo = this.and_ex(xn.lo, yn.lo, s);
-	// 		const hi  = this.and_ex(xn.hi, yn.hi, s);
-	// 		r = this.or(hi, lo);
-	// 	} else {
-	// 		const hi  = this.and_ex(xn.hi, yn.hi, s);
-	// 		const lo = this.and_ex(xn.lo, yn.lo, s);
-	// 		r = this.add(new node(v, hi, lo));
-	// 	}
-	// 	_dbg_and_ex(`and_ex(${and_ex_id}) ${r} (${x} and_ex5 ${y}, ${s.join(',')})`);
-	// 	return apply_ret(r, this.memo_and_ex);
-	// }
-	// and_not_ex(x, y, s) {
-	// 	const and_not_ex_id = ++_counters.and_not_ex;
-	// 	_dbg_and_not_ex(`and_not_ex_id++ = ${and_not_ex_id} (${x} and_not_ex ${y}, ${s.join(',')})`);
-	// 	if (x === y) return bdds.F;
-	// 	let t;
-	// 	let apply_ret = r => r;
-	// 	if (options.memoization) {
-	// 		t = `${x}.${y}.${s.join(',')}`;
-	// 		apply_ret = (r, m) => { m[t] = r; return r; }
-	// 		if (this.memo_and_not_ex.hasOwnProperty(t)) {
-	// 			_dbg_and_not_ex(`and_not_ex(${and_not_ex_id}) ${this.memo_and_not_ex[t]} (${x} and_not_ex1 ${y}, ${s.join(',')}) (memo:${t})`);
-	// 			return this.memo_and_not_ex[t];
-	// 		}
-	// 	}
-	// 	const xn = this.getnode(x).clone();
-	// 	if (bdds.leaf(xn)) {
-	// 		const r = bdds.trueleaf(xn) ? this.ex(y, s) : bdds.F;
-	// 		_dbg_and_not_ex(`and_not_ex(${and_not_ex_id}) ${r} (${x} and_not_ex2 ${y}, ${s.join(',')}) xn is leaf`);
-	// 		return apply_ret(r, this.memo_and_not_ex);
-	// 	}
-	// 	const yn = this.getnode(y).clone();
-	// 	if (bdds.leaf(yn)) {
-	// 		const r = !bdds.trueleaf(yn) ? bdds.F : this.ex(x, s);
-	// 		_dbg_and_not_ex(`and_not_ex(${and_not_ex_id}) ${r} (${x} and_not_ex3 ${y}, ${s.join(',')}) yn is leaf`);
-	// 		return apply_ret(r, this.memo_and_not_ex);
-	// 	}
-	// 	let v;
-	// 	if (((xn.v === 0) && (yn.v > 0))
-	// 	|| ((yn.v > 0) && (xn.v > yn.v))) {
-	// 		v = yn.v;
-	// 		xn.hi = x;
-	// 		xn.lo = x;
-	// 	} else {
-	// 		if (xn.v === 0) {
-	// 			const r = (a && b) ? bdds.T : bdds.F;
-	// 			_dbg_and_not_ex(`and_not_ex(${and_not_ex_id}) ${r} (${x} and_not_ex4 ${y}, ${s.join(',')})`);
-	// 			return apply_ret(r, this.memo_and_not_ex);
-	// 		} else {
-	// 			v = xn.v;
-	// 			if ((v < yn.v) || yn.v === 0) {
-	// 				yn.hi = y;
-	// 				yn.lo = y;
-	// 			}
-	// 		}
-	// 	}
-	// 	const hi  = this.and_not_ex(xn.hi, yn.hi, s);
-	// 	const lo = this.and_not_ex(xn.lo, yn.lo, s);
-	// 	const r = s[v-1]
-	// 		? this.or(hi, lo)
-	// 		: this.add(new node(v, hi, lo));
-	// 	_dbg_and_not_ex(`and_not_ex(${and_not_ex_id}) ${r} (${x} and_not_ex5 ${y}, ${s.join(',')})`);
-	// 	return apply_ret(r, this.memo_and_not_ex);
-	// }
 	// if-then-else operator
 	ite(v, t, e) {
-		const id = ++_counters.ite;
-		_dbg_fn_enter(`ite-${id} (v:${v}, t:${t}, e:${e})`);
+		DBG()//const id = ++__counters.ite);
+		TRC(`ite-${id} (v:${v}, t:${t}, e:${e})`);
 		const x = this.getnode(t);
 		const y = this.getnode(e);
-		_dbg_ite(`-ite-${id} (x:${x.key}, y:${y.key})`);
+		DBG(__ite(`-ite-${id} (x:${x.key}, y:${y.key})`));
 		if ((bdds.leaf(x) || v < x.v)
 		&&  (bdds.leaf(y) || v < y.v)) {
-			_dbg_ite(`-ite-${id} leafs`);
+			DBG(__ite(`-ite-${id} leafs`));
 			const n = new node(v + 1, t, e);
 			const r = this.add(n);
-			_dbg_ite(`/ite1-${id} (v:${v}, t:${t} ${x.key}, e:${e} ${y.key}) = ${r} (${n.key})`)
+			DBG(__ite(`/ite1-${id} (v:${v}, t:${t} ${x.key}, e:${e} ${y.key}) = ${r} (${n.key})`));
 			return r;
 		}
-		_dbg_ite(`-ite-${id} lo`);
 		const lo = this.and(this.from_bit(v, false), e);
-		_dbg_ite(`-ite-${id} lo: ${lo}`);
-		_dbg_ite(`-ite-${id} hi`);
+		DBG(__ite(`-ite-${id} lo: ${lo}`));
 		const hi = this.and(this.from_bit(v, true), t);
-		_dbg_ite(`-ite-${id} hi: ${hi}`);
+		DBG(__ite(`-ite-${id} hi: ${hi}`));
 		const r = this.or(hi, lo);
-		_dbg_ite(`/ite2-${id} (v:${v}, t:${t} (${x.key}), e:${e}) (${y.key}) = ${r} (hi:${hi}, lo:${lo})`);
+		DBG(__ite(`/ite2-${id} (v:${v}, t:${t} (${x.key}), e:${e}) (${y.key}) = ${r} (hi:${hi}, lo:${lo})`));
 		return r;
 	}
 
 	permute(x, m) {
-		const permute_id = ++_counters.permute;
-		_dbg_permute(`permute-${permute_id} (${x} permute ${m.join(',')})`);
+		DBG()//const id = ++__counters.permute);
+		DBG(__permute(`permute-${id} (${x} permute ${m.join(',')})`));
 		let t;
 		let apply_ret = r => r;
-		if (options.memoization) {
-			t = `${x}.${m.join(',')}`;
-			apply_ret = (r, m) => { m[t] = r; return r; }
-			if (this.memo_permute.hasOwnProperty(t)) {
-				_dbg_permute(`/permute-${permute_id} ${this.memo_permute[t]} (${x} permute1 ${m.join(',')}) (memo:${t})`);
-				return this.memo_permute[t];
-			}
+//##ifdef MEMO
+		t = `${x}.${m.join(',')}`;
+		apply_ret = (r, m) => { m[t] = r; return r; }
+		if (this.memo_permute.hasOwnProperty(t)) {
+			DBG(__permute(`/permute-${id} ${this.memo_permute[t]} (${x} permute1 ${m.join(',')}) (memo:${t})`));
+			return this.memo_permute[t];
 		}
-
+//##endif
 		if (bdds.leaf(x)) {
-			_dbg_permute(`/permute(${permute_id}) = ${x} (${x} permute2 ${m.join(',')}) x is leaf`);
+			DBG(__permute(`/permute(${id}) = ${x} (${x} permute2 ${m.join(',')}) x is leaf`));
 			return x;
 		}
 		const n = this.getnode(x);
 		const lo = this.permute(n.lo, m);
-		_dbg_permute(`-permute-${permute_id} lo: ${lo}`);
+		DBG(__permute(`-permute-${id} lo: ${lo}`));
 		const hi = this.permute(n.hi, m);
-		_dbg_permute(`-permute-${permute_id} hi: ${hi}`);
+		DBG(__permute(`-permute-${id} hi: ${hi}`));
 		const r = this.ite(m[n.v-1], hi, lo);
-		_dbg_permute(`/permute-${permute_id} = ${r} (${x} permute3 ${m.join(',')}) hi: ${hi}, lo: ${lo}, n.v:${n.v}, m[n.v-1]:${m[n.v-1]}`);
+		DBG(__permute(`/permute-${id} = ${r} (${x} permute3 ${m.join(',')}) hi: ${hi}, lo: ${lo}, n.v:${n.v}, m[n.v-1]:${m[n.v-1]}`));
 		return apply_ret(r, this.memo_permute);
 	}
 
@@ -700,12 +578,12 @@ class bdds {
 			n.hi = this.from_bit(x, true);
 		}
 		const res = this.add(n);
-		_dbg_bdd(`from_eq x:${x} y:${y} = ${res}`);
+		DBG(__bdd(`from_eq x:${x} y:${y} = ${res}`));
 		return res;
 	}
 
 	memos_clear() {
-		if (!options.memoization) return;
+//##ifdef MEMO
 		this.memo_and = {};
 		this.memo_and_not = {};
 		this.memo_or = {};
@@ -715,12 +593,8 @@ class bdds {
 		this.memo_deltail = {};
 		this.memo_and_deltail = {};
 		this.memo_ex = {};
+//##endif
 	}
 }
 
-module.exports = (o = {}) => {
-	options.memoization = o.hasOwnProperty('memoization')
-		? o.memoization
-		: options.memoization;
-	return { node, bdds };
-}
+module.exports = { node, bdds };

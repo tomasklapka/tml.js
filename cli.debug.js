@@ -2,4 +2,4 @@
 
 "use strict";
 
-require('./src/driver.js').main();
+require('./debug/driver.js').main();

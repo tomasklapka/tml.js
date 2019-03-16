@@ -14,15 +14,23 @@
 
 "use strict";
 
+//##ifdef DEBUG
+//##define DBG(x) x
+//##ifdef TRACE
+//##define TRC(x) __cout(x)
+//##else
+//##define TRC(x)
+//##endif
+//##include "__debug.js"
+//##else
+//##define DBG(x)
+//##define TRC(x)
+//##endif
+
 const { etype, raw_progs } = require('./input');
-const { bdds } = require('./bdds')();
+const { bdds } = require('./bdds');
 const { lp } = require("./lp");
 let pad = require("./lp").pad;
-
-// debug functions
-const _dbg_dict    = require('debug')('tml:dict');
-const _dbg_bdd     = require('debug')('tml:bdd:parsed');
-const _dbg_pfp     = require('debug')('tml:pfp');
 
 class driver {
 	constructor(str, proof) {
@@ -102,11 +110,11 @@ class driver {
 		if (typeof(s) === 'number') {     // if s is number
 			if (s < this.syms.length) {
 				const r = s < 0 ? this.vars[-s] : this.syms[s];
-				_dbg_dict(`dict_get(${s}) by id = ${r}`);
+				DBG(__dict(`dict_get(${s}) by id = ${r}`))
 				return r;
 			}
 			const r = s - this.syms.length;
-			_dbg_dict(`dict_get(${s}) number = ${r}`);
+			DBG(__dict(`dict_get(${s}) number = ${r}`))
 			return r;                 //     return symbol by index
 		}
 		if (!s || !s.length) return pad;
@@ -114,20 +122,20 @@ class driver {
 		if (s[0] === '?') {               // if s is variable
 			const p = this.vars.indexOf(s);
 			if (p >= 0) {             //     if variable already in dict
-				_dbg_dict(`dict_get(${s}) variable = -${p}`);
+				DBG(__dict(`dict_get(${s}) variable = -${p}`));
 				return -p;        //        return its index negated
 			}
 			this.vars.push(s);        //     else store the variable in dict
-			_dbg_dict(`dict_get(${s}) variable = -${this.vars.length-1} (created)`);
+			DBG(__dict(`dict_get(${s}) variable = -${this.vars.length-1} (created)`))
 			return -(this.vars.length-1); //     and return its index negated
 		}
 		const p = this.syms.indexOf(s);   // if s is symbol
 		if (p >= 0) {                     //     if is symbol in dict
-			_dbg_dict(`dict_get(${s}) symbol = ${p}`);
+			DBG(__dict(`dict_get(${s}) symbol = ${p}`))
 			return p;                 //         return its index
 		}
 		this.syms.push(s);                //     else store the symbol in dict
-		_dbg_dict(`dict_get(${s}) symbol = ${this.syms.length-1} (created)`);
+		DBG(__dict(`dict_get(${s}) symbol = ${this.syms.length-1} (created)`))
 		return this.syms.length-1;        //         and return its index
 	}
 
@@ -205,23 +213,26 @@ class driver {
 			const x = m.shift();
 			p.rule_add(this.rule_pad(x, ar), proof);
 		}
-		_dbg_bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', '));
-		_dbg_bdd(`prog_read bits:${this.bits}`);
+		DBG(__bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', ')))
+		DBG(__bdd(`prog_read bits:${this.bits}`))
 		return p;
 	}
 	// pfp logic
-	pfp(p, proof = null) {
+	pfp(p, proof = null, add) {
 		if (proof === null && (p === true || p === false)) {
 			proof = p;
 			let r; // = true; // ?
 			const sz = this.progs.length;
-			this.pfp(this.progs[0], proof ? this.proofs[0] : 0);
+			const add = { add: 0 };
+			this.pfp(this.progs[0], proof ? this.proofs[0] : 0, add);
 			for (let n = 1; n != sz; ++n) {
 				this.progs[n].db = this.progs[n-1].db;
-				r = this.pfp(this.progs[n], proof ? this.proofs[n] : 0);
+				r = this.pfp(this.progs[n], proof ? this.proofs[n] : 0, add);
 				if (!r) return false;
 			}
 			console.log(this.printdb('', sz - 1));
+			const q = this.progs[this.progs.length-1];
+			if (proof) this.printbdd(`proof:\n`, add.add, q.bits, q.proof_arity())
 			return true; //r;
 		}
 		const pf = [];
@@ -229,24 +240,24 @@ class driver {
 		let t = 0;
 		let step = 0;                // step counter
 		const s = [];                // db roots of previous steps
-		const add = {}, del = {};
+		const del = {};
 		do {
 			add.add = bdds.F;
 			del.del = bdds.F;
 			d = p.db;       // get current db root
 			s.push(d);           // store current db root into steps
-			_dbg_pfp(`____________________STEP_${++step}________________________`);
-			_dbg_pfp(`                                                     `);
+			DBG(__pfp(`____________________STEP_${++step}________________________`))
+			DBG(__pfp(`                                                     `))
 			p.fwd(add, del, proof ? pf : 0);         // do pfp step
-			_dbg_pfp(`___________________/STEP_${step}________________________`);
+			DBG(__pfp(`___________________/STEP_${step}________________________`))
 			t = p.bdd.and_not(add.add, del.del);
-			_dbg_pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t);
+			DBG(__pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t))
 			if (t === bdds.F && add.add !== bdds.F) {
-				_dbg_pfp('db set (contradiction):', p.db);
+				DBG(__pfp('db set (contradiction):', p.db));
 				return false;
 			} else {
 				p.db = p.bdd.or(p.bdd.and_not(p.db, del.del), t);
-				_dbg_pfp('db set:', p.db);
+				DBG(__pfp('db set:', p.db));
 			}
 			// if db root already resulted from any previous step
 			if (d === p.db) break;
@@ -264,7 +275,7 @@ class driver {
 		del.del = bdds.F;
 		q.db = q.get_varbdd();
 		q.fwd(add, del, 0);
-		console.log(this.printbdd(q, add));
+		console.log(this.printbdd('', add.add));
 		return true;
 	}
 }
@@ -302,7 +313,7 @@ async function main() {
 			return 4;
 		}
 	}
-	const proof = process.argv.length === 4 && process.argv[2] === '-p';
+	const proof = process.argv.length === 3 && process.argv[2] === '-p';
 	const d = new driver(s, proof);
 	let r = false;
 	try {
