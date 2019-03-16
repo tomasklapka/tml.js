@@ -1,6 +1,6 @@
 #ifdef DEBUG
 #  include "__debug.js"
-#  define ID(x) const id = ++__counters.x
+#  define ID(x) const id = __counter(x)
 #  define DBG(x) x
 #  ifdef TRACE
 #    define TRC(x) __cout(x)

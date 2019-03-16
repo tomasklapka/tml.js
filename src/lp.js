@@ -15,9 +15,6 @@
 "use strict";
 
 //## include "__common.h"
-//## ifdef DEBUG
-const __counters = { lp: 0, from_range: 0, from_arg: 0, rule_add: 0 };
-//## endif
 
 const { err_proof } = require('./messages');
 const { bdds } = require('./bdds');
@@ -26,7 +23,7 @@ const bdd = new bdds();
 const pad = 0;
 
 function from_range(max, bits, offset, r) {
-	ID(from_range);
+	ID('from_range');
 	TRC(`from_range-${id}`);
 	let x = bdds.F;
 	for (let n = 1; n != max; ++n) {
@@ -66,7 +63,7 @@ class rule_body {
 	}
 
 	from_arg(vij, j, bits, dsz, m) {
-		ID(from_arg);
+		ID('from_arg');
 		TRC(`from_arg-${id}`);
 		const eq = [];
 		if (vij >= 0) {
@@ -236,7 +233,8 @@ class rule {
 // [pfp] logic program
 class lp {
 	constructor(maxbits, arity, dsz) {
-		ID(lp);
+		ID('lp');
+		DBG(this.__id = id);
 		this.bdd = bdd; // keep link to the bdd
 		this.db = bdds.F;
 		this.rules = [];     // p-datalog rules
@@ -252,7 +250,7 @@ class lp {
 	getdb() { return this.getbdd(this.db); }
 	// single pfp step
 	rule_add(x, proof) {
-		ID(rule_add);
+		ID('rule_add');
 		TRC(`rule_add-${id}`);
 		DBG(__rule(`rule_add() x:`, x, this.bits, this.dsz, proof));
 		if (x.length === 1) {

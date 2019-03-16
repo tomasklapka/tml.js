@@ -15,11 +15,6 @@
 "use strict";
 
 //## include "__common.h"
-//## ifdef DEBUG
-const __counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
-	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0,
-	sat: 0, add_nocheck: 0, from_int: 0 };
-//## endif
 
 //## ifdef MEMO
 //##   define apply_ret(r, m) m[t] = r; return r
@@ -92,7 +87,7 @@ class bdds {
 	}
 
 	from_int(x, bits, offset) {
-		ID(from_int);
+		ID('from_int');
 		TRC(`from_int-${id}`);
 		let r = bdds.T;
 		let b = bits--;
@@ -109,7 +104,7 @@ class bdds {
 
 	// add node directly without checking
 	add_nocheck(n) {
-		ID(add_nocheck);
+		ID('add_nocheck');
 		TRC(`add_nocheck-${id}`);
 		const r = this.V.length;
 		this.M[n.key] = r;
@@ -145,7 +140,7 @@ class bdds {
 	}
 	// adds new node
 	add(n) {
-		ID(add);
+		ID('add');
 		DBG(__add(`add-${id} (${n.key})`));
 		//TRC(`add-${id}`);
 		let r = null;
@@ -161,7 +156,7 @@ class bdds {
 	}
 
 	sat(v, nvars, n, p, r) {
-		ID(sat);
+		ID('sat');
 		TRC(`sat-${id}`);
 		if (bdds.leaf(n) && !bdds.trueleaf(n)) return;
 		if (v < n.v) {
@@ -188,7 +183,7 @@ class bdds {
 	}
 
 	or(x, y) {
-		ID(or);
+		ID('or');
 		TRC(`or-${id} (${x} or ${y})`);
 		if (x === y) return x;
 //## ifdef MEMO
@@ -237,7 +232,7 @@ class bdds {
 	}
 
 	ex(x, b) {
-		ID(ex);
+		ID('ex');
 		TRC(`ex-${id} (${x} ex ${b.map(n=>n?'1':'0').join('')})`);
 //## ifdef MEMO
 		const t = x+'.'+b.join(',');
@@ -268,7 +263,7 @@ class bdds {
 	}
 
 	and(x, y) {
-		ID(and);
+		ID('and');
 		TRC(`and-${id} (${x} and ${y})`);
 		if (x === y) return x;
 //## ifdef MEMO
@@ -317,7 +312,7 @@ class bdds {
 	}
 
 	and_not(x, y) {
-		ID(and_not);
+		ID('and_not');
 		TRC(`and_not-${id} (${x} and_not ${y})`);
 		if (x === y) return bdds.F;
 //## ifdef MEMO
@@ -365,7 +360,7 @@ class bdds {
 	}
 
 	deltail(x, h) {
-		ID(deltail);
+		ID('deltail');
 		TRC(`deltail-${id} (${x} deltail ${h})`);
 //## ifdef MEMO
 		const t = `${x}.${h}`;
@@ -392,7 +387,7 @@ class bdds {
 	}
 
 	and_deltail(x, y, h) {
-		ID(and_deltail);
+		ID('and_deltail');
 		TRC(`and_deltail-${id} (${x} and_deltail ${y}, ${h})`);
 		if (x === y) return this.deltail(x, h);
 //## ifdef MEMO
@@ -441,7 +436,7 @@ class bdds {
 	}
 
 	and_many(v) {
-		ID(and_many);
+		ID('and_many');
 		TRC(`and_many-${id} (v:${v.join(',')})`);
 		let from = 0;
 		if (1 === (v.length - from)) {
@@ -493,7 +488,7 @@ class bdds {
 	}
 	// if-then-else operator
 	ite(v, t, e) {
-		ID(ite);
+		ID('ite');
 		TRC(`ite-${id} (v:${v}, t:${t}, e:${e})`);
 		const x = this.getnode(t);
 		const y = this.getnode(e);
@@ -516,7 +511,7 @@ class bdds {
 	}
 
 	permute(x, m) {
-		ID(permute);
+		ID('permute');
 		DBG(__permute(`permute-${id} (${x} permute ${m.join(',')})`));
 //## ifdef MEMO
 		const t = `${x}.${m.join(',')}`;

@@ -16,3 +16,8 @@ const __ite         = __d('tml:bdd:ite');
 const __parser      = __d('tml:parser');
 const __varbdd      = __d('tml:pfp:varbdd');
 const __rule        = __d('tml:pfp:rule');
+const __counters    = {};
+const __counter     = name => {
+	if (!__counters.hasOwnProperty(name)) __counters[name] = 0;
+	return ++__counters[name];
+}
