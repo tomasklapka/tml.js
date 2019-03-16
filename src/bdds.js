@@ -18,7 +18,7 @@
 //## ifdef DEBUG
 const __counters = { or: 0, ex: 0, and: 0, deltail: 0, and_many: 0, add: 0,
 	and_deltail: 0, and_ex: 0, and_not: 0, and_not_ex: 0, permute: 0, ite: 0,
-	sat: 0, add_nocheck: 0 };
+	sat: 0, add_nocheck: 0, from_int: 0 };
 //## endif
 
 //## ifdef MEMO
@@ -147,7 +147,7 @@ class bdds {
 	add(n) {
 		ID(add);
 		DBG(__add(`add-${id} (${n.key})`));
-		TRC(`add-${id}`);
+		//TRC(`add-${id}`);
 		let r = null;
 		DBG()//let __dbg = '');
 		do {

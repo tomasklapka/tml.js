@@ -199,7 +199,7 @@ class raw_progs {
 				const x = new raw_prog();
 				++pos.pos;
 				if (!x.parse(l, pos)) throw new Error(err_parse);
-				p.push(x);
+				this.p.push(x);
 				if (l[pos.pos++] !== '}') throw new Error(err_close_curly);
 			} while (pos.pos < l.length);
 		}

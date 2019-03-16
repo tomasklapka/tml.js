@@ -15,7 +15,7 @@ MKDIR_P = mkdir -p
 PRECPP = (sed 's_^//\#\#_\#_g' | sed 's_DBG()//_DBG(_g')
 
 CPPFLAGS = -P -undef -Wundef -std=c99 -nostdinc -Wtrigraphs -fdollars-in-identifiers -C
-CPPDEBUGFLAGS = ${CPPFLAGS} -D DEBUG
+CPPDEBUGFLAGS = ${CPPFLAGS} -D DEBUG -D TRACE
 CPP = cpp
 
 BROWSERIFYFLAGS = -r ./index.js:tml -d
@@ -46,7 +46,7 @@ tml.debug.min.js: tml.debug.js
 	${MINIFY} ${BROWSER_DIR}tml.debug.js > ${BROWSER_DIR}tml.debug.min.js
 tml.debug.map.js: tml.debug.js
 tml.debug.js: tml.debug.wmap.js
-	${EXORCIST} ${BROWSER_DIR}tml.debug.map.js < ${BROWSER_DIR}tml.wmap.js > ${BROWSER_DIR}tml.debug.js
+	${EXORCIST} ${BROWSER_DIR}tml.debug.map.js < ${BROWSER_DIR}tml.debug.wmap.js > ${BROWSER_DIR}tml.debug.js
 tml.debug.wmap.js: node_modules debug browser_dir
 	${BROWSERIFY} ${BROWSERIFYDEBUGFLAGS} > ${BROWSER_DIR}tml.debug.wmap.js
 

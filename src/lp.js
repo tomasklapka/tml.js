@@ -16,7 +16,7 @@
 
 //## include "__common.h"
 //## ifdef DEBUG
-const __counters = { lp: 0, from_int: 0, from_range: 0, from_arg: 0 };
+const __counters = { lp: 0, from_range: 0, from_arg: 0, rule_add: 0 };
 //## endif
 
 const { err_proof } = require('./messages');
@@ -252,6 +252,8 @@ class lp {
 	getdb() { return this.getbdd(this.db); }
 	// single pfp step
 	rule_add(x, proof) {
+		ID(rule_add);
+		TRC(`rule_add-${id}`);
 		DBG(__rule(`rule_add() x:`, x, this.bits, this.dsz, proof));
 		if (x.length === 1) {
 			DBG(__rule('rule_add fact'));

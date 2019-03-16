@@ -14,17 +14,17 @@ declare -a bdd=(
 	bdd.cpp
 	#bdd_add
 	bdd_add_nocheck bdd_or bdd_ex bdd_and bdd_and_not bdd_deltail
-	bdd_and_deltail bdd_and_many bdd_ite bdd_permute sat allsat
+	bdd_and_deltail bdd_and_many bdd_ite bdd_permute sat allsat from_int
 )
-# tml.cpp trace fns
-declare -a tml=(
-	tml.cpp
-	from_int from_eq from_range rule_add body from_arg fwd from_bits
+# lp.cpp trace fns
+declare -a lp=(
+	lp.cpp
+	from_eq from_range rule_add body from_arg fwd from_bits
 )
 # driver.cpp trace fns
 declare -a driver=(
 	driver.cpp
-	main driver get_rule get_term
+	main #driver get_rule get_term
 )
 
 function file_prepend() {
@@ -66,7 +66,7 @@ sed -i -E "s/\/\/\#define DEBUG/\#define DEBUG/g" defs.h
 
 # inject fn tracing (inc. fn counters)
 inject_debug bdd[@] '#include <cstddef>\n#include <iostream>\n'
-inject_debug tml[@] '#include <cstddef>\n'
+inject_debug lp[@] '#include <cstddef>\n'
 inject_debug driver[@] '#include <cstddef>\n'
 
 # make
