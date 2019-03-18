@@ -16,14 +16,20 @@
 
 //## include "__common.h"
 
-const isalnum = c => {
-	return /[\d\w]/.test(c) ||/\p{L}/u.test(c);
-}
-const isalpha = c => {
-	return !(/\d/.test(c)) && (/\w/.test(c) || /\p{L}/u.test(c));
-}
-// skip_ws or skip 1 or more characters from parsing input
+const {
+	unmatched_quotes, err_fname, err_quote, err_chr, err_directive_arg,
+	dot_expected, err_int, err_term_or_dot, err_parse, err_close_curly,
+	err_escape
+} = require('./messages');
+
+const isspace = c => /\s/.test(c);
+const isdigit = c => /\d/.test(c);
+const isalnum = c => /[\d\w]/.test(c) || /\p{L}/u.test(c);
+const isalpha = c => !isdigit(c) && isalnum(c);
+
+// skip 1 or more characters from parsing input
 const skip = (s, n = 1) => { s.s = s.s.slice(n); s.p += n; }
+// skip whitespace
 const skip_ws = s => {
 	const sl = s.s.length;
 	s.s = s.s.replace(/^\s+/, '');
@@ -31,7 +37,11 @@ const skip_ws = s => {
 };
 
 function lex(s) {
-	const ret = t => {
+	const ret = (t, n = 0) => {
+		if (n > 0) {
+			skip(s, n);
+			return t;
+		}
 		const r = t.substring(0, s.p);
 		s.p = 0;
 		return r;
@@ -44,7 +54,7 @@ function lex(s) {
 		skip(s);
 		while (s.s[0] !== '"') {
 			if (!s.s.length) throw new Error(unmatched_quotes);
-			else if (s.s[0] === "'" && '\"'.indexOf(s.s[1]) !== -1) {
+			else if (s.s[0] === '\\' && "\\\"".indexOf(s.s[1]) !== -1) {
 				throw new Error(err_escape);
 			}
 		}
@@ -57,6 +67,7 @@ function lex(s) {
 			if (!s.s.length) throw new Error(err_fname);
 			skip(s);
 		}
+		skip(s);
 		return ret(t);
 	}
 	if (s.s[0] === "'") {
@@ -66,11 +77,11 @@ function lex(s) {
 	}
 	if (s.s[0] === ':') {
 		skip(s);
-		if (s.s[0] == '-') { skip(s); return ':-'; }
+		if (s.s[0] == '-') { return ret(':-', 1); }
 		else throw new Error(err_chr);
 	}
-	if ("~.,{}@".indexOf(s.s[0]) !== -1) { const r = s.s[0]; skip(s); return r; }
-	if (s.s[0] === '?' || s.s[0] == '-') skip(s);
+	if ("!~.,{}@".indexOf(s.s[0]) !== -1) { return ret(s.s[0], 1); }
+	if ("?-".indexOf(s.s[0]) !== -1) skip(s);
 	while (isalnum(s.s[0])) skip(s);
 	return ret(t);
 }
@@ -86,8 +97,14 @@ function prog_lex(cws) {
 }
 
 class directive {
-	constructor() { this.rel = null; this.arg = null; this.fname = false; }
+	constructor() {
+		this.rel = null;
+		this.arg = null;
+		this.fname = false; // is filename?
+	}
 	parse(l, pos) {
+		ID_TRC('directive.parse');
+		DBG(__parser(`directive.parse(${l[pos.pos]})`));
 		if (l[pos.pos] !== '@') return false;
 		rel = l[++pos.pos];
 		if (l[++pos.pos] === '<') this.fname = true;
@@ -107,28 +124,32 @@ function get_int(from) {
 		neg = true;
 		skip(s);
 	}
-	if (!/\d+/.test(s.s)) throw new Error(err_int);
+	if (!isdigit(s.s)) throw new Error(err_int);
 	r = Number(s.s);
 	return neg ? -r : r;
 }
 
 const etype = Object.freeze({ SYM: 0, NUM: 1, CHR: 2, VAR: 3 });
-
 class elem {
+	constructor() {
+		this.num = 0; // number
+		this.e = null; // lexeme
+	}
 	parse(l, pos) {
+		ID_TRC('elem.parse');
 		DBG(__parser(`elem.parse(${l[pos.pos]})`));
-		const p = pos.pos;
-		if (!isalnum(l[p] &&
-			"'-?".indexOf(l[p]) !== -1)) return false;
+		const p = pos.pos; const c = l[p][0];
+		if (!isalnum(c) &&
+			"'-?".indexOf(c) === -1) return false;
 		this.e = l[p];
-		if (l[p] === "'") {
-			const ll = l[p].length;
+		if (c === "'") {
+			const ll = c.length;
 			if (ll !== 3 ||
 				l[p][ll-1] !== "'") throw new Error(err_quote);
 			this.type = etype.CHR;
 			this.e = l[p].slice(1, ll-1);
-		} else if (l[p][0] === '?') this.type = etype.VAR;
-		else if (isalpha(l[p])) this.type = etype.SYM;
+		} else if (c === '?') this.type = etype.VAR;
+		else if (isalpha(c)) this.type = etype.SYM;
 		else {
 			this.type = etype.NUM;
 			this.num = get_int(l[p]);
@@ -137,10 +158,19 @@ class elem {
 		return true;
 	}
 }
+elem.SYM = etype.SYM;
+elem.NUM = etype.NUM;
+elem.CHR = etype.CHR;
+elem.VAR = etype.VAR;
 
 class raw_term {
-	constructor() { this.neg = false; this.e = [] }
+	constructor() {
+		this.neg = false; // negated term?
+		this.e = [] // array of elem
+	}
 	parse(l, pos) {
+		ID_TRC('raw_term.parse');
+		DBG(__parser(`raw_term.parse(${l[pos.pos]})`));
 		this.neg = l[pos.pos] === '~';
 		if (this.neg) ++pos.pos;
 		while ('.:,'.indexOf(l[pos.pos][0]) === -1) {
@@ -153,8 +183,20 @@ class raw_term {
 }
 
 class raw_rule {
-	constructor() { this.h = new raw_term(); this.b = []; }
+	constructor() {
+		this.h = new raw_term(); // head = raw_term
+		this.b = []; // body = arr of raw_term
+	}
 	parse(l, pos) {
+		ID_TRC('raw_rule.parse');
+		DBG(__parser(`raw_rule.parse(${l[pos.pos]})`));
+		this.goal = l[pos.pos];
+		if (this.goal === '!') {
+			this.pgoal = l[++pos.pos];
+			if (this.pgoal === '!') {
+				++pos.pos;
+			}
+		}
 		if (!this.h.parse(l, pos)) return false;
 		if (l[pos.pos] === '.') { ++pos.pos; return true; }
 		if (l[pos.pos++] !== ':-') throw new Error(err_chr);
@@ -171,13 +213,18 @@ class raw_rule {
 }
 
 class raw_prog {
-	constructor() { this.d = []; this.r = []; }
+	constructor() {
+		this.d = []; // arr of directive
+		this.r = []; // arr of raw_rule
+	}
 	parse(l, pos) {
+		ID_TRC('raw_prog.parse');
+		DBG(__parser(`raw_prog.parse(${l[pos.pos]})`));
 		while (pos.pos < l.length && l[pos.pos] !== '}') {
 			const d = new directive();
 			const r = new raw_rule();
-			if (d.parse(l, pos)) this.d.push(d);
-			else if (r.parse(l, pos)) this.r.push(r);
+			if (d.parse(l, pos)) this.d[this.d.length] = d;
+			else if (r.parse(l, pos)) this.r[this.r.length] = r;
 			else return false;
 		}
 		return true;
@@ -186,7 +233,7 @@ class raw_prog {
 
 class raw_progs {
 	constructor(str) {
-		this.p = [];
+		this.p = []; // arr of raw_prog
 		const s = string_read_text(str);
 		let pos = { pos: 0 };
 		const l = prog_lex(s);
@@ -207,6 +254,7 @@ class raw_progs {
 }
 // removes comments
 function string_read_text(data) {
+	ID_TRC('string_read_text');
 	let s = '', skip = false;
 	for (let n = 0; n < data.length; n++) {
 		const c = data[n];
@@ -218,11 +266,13 @@ function string_read_text(data) {
 }
 // read prog from file
 function file_read_text(fname) {
+	ID_TRC('file_read_text');
 	const { readFileSync } = require('fs');
 	return string_read_text(readFileSync(fname).toString());
 }
 
 module.exports = {
-	etype, raw_progs,
+	isspace, isalnum, isalpha, isdigit,
+	elem, raw_progs,
 	string_read_text, file_read_text
 };

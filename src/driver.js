@@ -16,130 +16,198 @@
 
 //## include "__common.h"
 
-const { etype, raw_progs } = require('./input');
-const { bdds } = require('./bdds');
-const { lp } = require("./lp");
-let pad = require("./lp").pad;
+const {
+	raw_progs, elem, isspace, isalnum, isalpha, isdigit
+} = require('./input');
+const { dict } = require('./dict');
+const { lp } = require('./lp');
+
+const { err_null_in_head } = require('./messages');
 
 class driver {
-	constructor(str, proof) {
+	constructor(rp) {
+		ID_TRC('driver');
 		// initialize symbols and variables tables
-		this.syms = [ pad ];
-		this.vars = [ pad ];
-		this.strs = [];
-		this.progs = [];
-		this.proofs = [];
+		this.d = new dict();
+		this.strs_extra = [];
+		this.builtin_rels = [];
+		this.builtin_symbdds = [];
+		this.prog = null;
 		this.mult = false;
-		this.nums = 0;
-		let rp;
-		try {
-			rp = new raw_progs(str); // parse source from s
-		} catch (err) {
-			console.log('Parse error:', err);
-			return
-		}
-		for (let n = 0; n != rp.p.length; ++n) {
-			this.strs[this.strs.length] = {};
-			for (let k = 0; k != rp.p[n].d.length; ++k) {
-				const d = rp.p[n].d[k];
-				if (d.fname) {
-					this.nums = Math.max(this.nums, 256 + d.arg.length-2);
-				} else {
-					this.nums = Math.max(this.nums, 256 + d.arg.length)
-				}
-			}
-		}
-		pad = this.dict_get('', 0);
-		let ar = 0;
-		for (let n = 0; n != rp.p.length; ++n) {
-			for (let k = 0; k != rp.p[n].d.length; ++k) {
-				ar = Math.max(ar, 4);
-				const d = rp.p[n].d[k];
-				const str = d.arg.slice(1, d.arg.length-1);
-				this.strs[n][this.dict_get(d.rel)] = d.fname ? file_read_text(str) : str;
-			}
-			for (let i = 0; i != rp.p[n].r.length; ++i) {
-				const x = rp.p[n].r[i];
-				ar = Math.max(ar, x.h.e.length);
-				for (let j = 0; j != x.h.e.length; ++j) {
-					const e = x.h.e[j];
-					if (e.type === etype.SYM) {
-						this.dict_get(e.e);
-					}
-				}
-				for (let k = 0; k != x.b.length; ++k) {
-					const y = x.b[k];
-					ar = Math.max(ar, y.e.length);
-					for (let j = 0; j != y.e.length; ++j) {
-						const e = y.e[j];
-						if (e.type === etype.SYM) {
-							this.dict_get(e.e);
-						}
-					}
-				}
+		if (!(rp instanceof raw_progs)) {
+			try {
+				rp = new raw_progs(rp);
+			} catch (err) {
+				console.log('Parse error:', err);
+				return
 			}
 		}
 		for (let n = 0; n != rp.p.length; ++n) {
-			const m = [];
-			this.proofs.push([]);
-			for (let i = 0; i != rp.p[n].r.length; ++i) {
-				const x = rp.p[n].r[i];
-				m.push(this.get_rule(x));
-			}
-			this.prog_add(m, ar, this.strs[n], proof ? this.proofs[this.proofs.length] : null);
+			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
+			this.nul = this.d.get("null");
+			this.prog_init(rp.p[n], this.directives_load(rp.p[n]));
 		}
 	}
 	// nsyms = number of stored symbols
-	get nsyms() { return this.syms.length + this.nums; }
+	get nsyms() { return this.d.nsyms; }
 	// returns bit size of the dictionary
-	get bits() { return 32 - Math.clz32(this.nsyms); }
-	// gets and remembers the identifier and returns it's unique index
-	// positive indexes are for symbols and negative indexes are for vars
-	dict_get(s) {
-		if (typeof(s) === 'number') {     // if s is number
-			if (s < this.syms.length) {
-				const r = s < 0 ? this.vars[-s] : this.syms[s];
-				DBG(__dict(`get(${s}) by id = ${r}`))
-				return r;
-			}
-			const r = s - this.syms.length;
-			DBG(__dict(`get(${s}) number = ${r}`))
-			return r;                 //     return symbol by index
+	get bits() { return this.d.bits; }
+
+	from_func(fn, name, from, to, r) {
+		ID_TRC('from_func');
+		const rel = this.d.get(name);
+		this.builtin_rels[this.builtin_rels.length] = rel;
+		for (; from !== to; ++from) {
+			if (fn(from)) r[r.length] = [ [ 2, rel, from ] ];
 		}
-		if (!s || !s.length) return pad;
-		if (/\d/.test(s[0])) throw new Error("symbol name cannot begin with a digit");
-		if (s[0] === '?') {               // if s is variable
-			const p = this.vars.indexOf(s);
-			if (p >= 0) {             //     if variable already in dict
-				DBG(__dict(`get(${s}) variable = -${p}`));
-				return -p;        //        return its index negated
-			}
-			this.vars.push(s);        //     else store the variable in dict
-			DBG(__dict(`get(${s}) variable = -${this.vars.length-1} (created)`))
-			return -(this.vars.length-1); //     and return its index negated
-		}
-		const p = this.syms.indexOf(s);   // if s is symbol
-		if (p >= 0) {                     //     if is symbol in dict
-			DBG(__dict(`get(${s}) symbol = ${p}`))
-			return p;                 //         return its index
-		}
-		this.syms.push(s);                //     else store the symbol in dict
-		DBG(__dict(`get(${s}) symbol = ${this.syms.length-1} (created)`))
-		return this.syms.length-1;        //         and return its index
 	}
 
-	printbdd(os = '', t) {
+	get_char_builtins() {
+		ID_TRC('get_char_builtins');
+		const m = [];
+		this.from_func(isspace, 'space', 0, 255, m);
+		this.from_func(isalnum, 'alnum', 0, 255, m);
+		this.from_func(isalpha, 'alpha', 0, 255, m);
+		this.from_func(isdigit, 'digit', 0, 255, m);
+		console.log(m);
+		return m;
+	}
+
+	get_nums(p) {
+		ID_TRC('get_nums');
+		let nums = 0;
+		for (let i = 0; i != p.d.length; ++i) {
+			const d = p.d[i];
+			const add = d.fname
+				? d.arg.length
+				: fsize(d.arg.slice(1, d.arg.length-1));
+			nums = Math.max(nums, 256 + add);
+		}
+		for (let i = 0; i != p.r.length; ++i) { const r = p.r[i];
+			for (let j = 0; j != r.h.e.length; ++j) { const e = r.h.e[j];
+				if (e.type === elem.NUM) nums = Math.max(nums, e.num + 256);
+			}
+			for (let j = 0; j != r.b.length; ++j) { const t = r.b[j];
+				for (let k = 0; k != t.e.length; ++k) { const e = t.e[k];
+					if (e.type === elem.NUM) nums = Math.max(nums, e.num + 256);
+				}
+			}
+		}
+		return nums;
+	}
+
+	directives_load(p) {
+		ID_TRC('directives_load');
+		const r = {};
+		for (let k = 0; k != p.d.length; ++k) {
+			const d = p.d[k];
+			const str = d.arg.slice(1, d.arg.length-1);
+			r[this.d.get(d.rel)] = d.fname
+				? file_read_text(str.replace('\\', ''))
+				: str;
+		}
+		return r;
+	}
+
+	get_term(r) {
+		ID_TRC('get_term');
+		const t = [];
+		t.push(r.neg ? -1 : 1);
+		for (let i = 0; i != r.e.length; ++i) {
+			const e = r.e[i];
+			if (e.type === elem.NUM) t.push(e.num + 256);
+			else if (e.type === elem.CHR) t.push(e.e[0]);
+			else t.push(this.d.get(e.e));
+		}
+		return t;
+	}
+
+	get_rule(r) {
+		ID_TRC('get_rule');
+		const m = [];
+		m.push(this.get_term(r.h));
+		if (m[0][0] > 0) {
+			for (let i = 1; i < m[0].length; ++i) {
+				if (m[0][i] === this.nul) throw new Error(err_null_in_head);
+			}
+		}
+		for (let i = 0; i != r.b.length; ++i) {
+			m.push(this.get_term(r.b[i]));
+		}
+		return m;
+	}
+
+	prog_init(p, s) {
+		ID_TRC('prog_init');
+		let m = [];
+		const g = [];
+		const pg = [];
+		if (!p.d.length) {
+			const rtxt = this.get_char_builtins();
+			m = m.concat(rtxt);
+		}
+		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];
+			if (x.goal && !x.pgoal) {
+				if (x.b.length) throw new Error ('assert x.b.empty()');
+				g[g.length] = this.get_term(x.h);
+			} else {
+				if (x.pgoal) {
+					if (x.b.length) throw new Error ('assert x.b.empty()');
+					pg[pg.length] = this.get_term(x.h);
+				} else {
+					m[m.length] = this.get_rule(x);
+				}
+			}
+		}
+		const keys = Object.keys(s);
+		for (let i = 0; i != keys.length; ++i) {
+			const x = s[keys[i]];
+			for (let n = 0; n != x.length-1; ++n) {
+				m[m.length] = [[ 1, keys[i], x[n]+1, n + 257, n + 258 ]];
+			}
+			m[m.length] = [[
+				1, keys[i], x[x.length-1]+1,
+				x.length+256, this.nul ]];
+		}
+		this.prog = new lp(m, g, pg, this.prog);
+		this.prog.nul = this.nul;
+		DBG(this.prog.drv = this);
+		if (!s.length) {
+			for (let i = 0; i != this.builtin_rels.length; ++i) {
+				this.builtin_symbdds.push(this.prog.get_sym_bdd(x, 0))
+			}
+		}
+		DBG(__bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', ')))
+		DBG(__bdd(`prog_read bits:${this.bits}`))
+		return p;
+	}
+	// pfp logic
+	pfp(p) {
+		ID_TRC('driver_pfp');
+		if (!this.prog.pfp()) return false;
+
+		let db = this.prog.db;
+		for (let i = 0; i != this.builtin_symbdds.length; ++i) {
+			db = bdd.and_not(db, this.builtin_symbdds[i]);
+		}
+		this.printdb('', this.prog.getbdd(db));
+		return true;
+	}
+
+	// os - output string, p - program, t - db root
+	// os - output string, t = bdd
+	printbdd(os = '', p, t = null) {
+		if (t === null) { t = p; p = null; }
+		else return this.printbdd(os, p.getbdd(t));
 		if (!Array.isArray(t)) {
-			t = this.progs[t].db;
+			t = p.getbdd(this.progs[t].db);
 		}
 		const s = [];
-		for (let i = 0; i < t.length; i++) {
-			const v = t[i];
+		for (let i = 0; i < t.length; i++) { const v = t[i];
 			let ss = '';
-			for (let j = 0; j < v.length; j++) {
-				const k = v[j];
+			for (let j = 0; j < v.length; j++) { const k = v[j];
 				if (k === pad) ss += '* ';
-				else if (k < this.nsyms) ss += this.dict_get(k) + ' ';
+				else if (k < this.nsyms) ss += this.d.get(k) + ' ';
 				else ss += '[' + k + '] ';
 			}
 			s.push(ss);
@@ -147,175 +215,20 @@ class driver {
 		os += s.sort().join(`\n`);
 		return os;
 	}
-	printdb(os) {
-		return this.printbdd(os, this.progs[this.progs.length-1].getdb())
+
+	printbdd_one(os = '', t) {
+		os += "one of " + this.count(t, this.prog.bits * this.prog.ar) +
+			" results: ";
+		return this.printbdd(os, this.prog.getbdd_one(t));
+	}
+
+	printdb(os, p = null) {
+		p = p || this.prog;
+		return this.printbdd(os, p, p.getbdd(p.db));
 	}
 	toString() { return this.printdb(); }
 
-	get_term(r) {
-		const t = [];
-		t.push(r.neg ? -1 : 1);
-		for (let i = 0; i != r.e.length; ++i) {
-			const e = r.e[i];
-			if (e.type === etype.NUM) t.push(e.num);
-			else if (e.type === etype.CHR) t.push(e.e[0]);
-			else t.push(this.dict_get(e.e));
-		}
-		return t;
-	}
-
-	get_rule(r) {
-		const m = [];
-		m.push(this.get_term(r.h));
-		for (let i = 0; i != r.b.length; ++i) {
-			m.push(this.get_term(r.b[i]));
-		}
-		return m;
-	}
-
-	term_pad(t, ar) {
-		const l = t.length;
-		if (l < ar+1) {
-			t = t.concat(Array(ar + 1 - l).fill(pad));
-		}
-	}
-
-	rule_pad(t, ar) {
-		const r = t.slice();
-		for (let i = 0; i != r.length; ++i) {
-			this.term_pad(r[i], ar);
-		}
-		return r;
-	}
-
-	prog_add(m, ar, s, proof) {
-		const p = new lp(this.bits, ar, this.nsyms);
-		this.progs.push(p);
-		const keys = Object.keys(s);
-		for (let i = 0; i != keys.length; ++i) {
-			const x = s[keys[i]];
-			for (let n = 0; n != x.length; ++n) {
-				p.rule_add(rule_pad([ [ 1, n, n + 256, x[n]] ], ar), proof);
-			}
-		}
-		while (m.length) {
-			const x = m.shift();
-			p.rule_add(this.rule_pad(x, ar), proof);
-		}
-		DBG(__bdd(`prog_read bdd:`, p.bdd.V.map(n=>`${p.bdd.M[n.key]}=(${n.key})`).join(', ')))
-		DBG(__bdd(`prog_read bits:${this.bits}`))
-		return p;
-	}
-	// pfp logic
-	pfp(p, proof = null, add) {
-		if (proof === null && (p === true || p === false)) {
-			proof = p;
-			let r; // = true; // ?
-			const sz = this.progs.length;
-			const add = { add: 0 };
-			this.pfp(this.progs[0], proof ? this.proofs[0] : 0, add);
-			for (let n = 1; n != sz; ++n) {
-				this.progs[n].db = this.progs[n-1].db;
-				r = this.pfp(this.progs[n], proof ? this.proofs[n] : 0, add);
-				if (!r) return false;
-			}
-			console.log(this.printdb('', sz - 1));
-			const q = this.progs[this.progs.length-1];
-			if (proof) this.printbdd(`proof:\n`, add.add, q.bits, q.proof_arity())
-			return true; //r;
-		}
-		const pf = [];
-		let d;                       // current db root
-		let t = 0;
-		let step = 0;                // step counter
-		const s = [];                // db roots of previous steps
-		const del = {};
-		do {
-			add.add = bdds.F;
-			del.del = bdds.F;
-			d = p.db;       // get current db root
-			s.push(d);           // store current db root into steps
-			DBG(__pfp(`____________________STEP_${++step}________________________`))
-			DBG(__pfp(`                                                     `))
-			p.fwd(add, del, proof ? pf : 0);         // do pfp step
-			DBG(__pfp(`___________________/STEP_${step}________________________`))
-			t = p.bdd.and_not(add.add, del.del);
-			DBG(__pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t))
-			if (t === bdds.F && add.add !== bdds.F) {
-				DBG(__pfp('db set (contradiction):', p.db));
-				return false;
-			} else {
-				p.db = p.bdd.or(p.bdd.and_not(p.db, del.del), t);
-				DBG(__pfp('db set:', p.db));
-			}
-			// if db root already resulted from any previous step
-			if (d === p.db) break;
-			if (s.includes(p.db)) return false; // unsat
-		} while (true);
-		if (!proof) return true;
-
-		const ar = p.proof_arity();
-		for (let i = 0; i != proof.length; ++i) { console.log(proof[i]); }
-		const q = this.prog_add(
-			JSON.parse(JSON.stringify(proof)),
-			ar, {}, false);
-		q.db = bdds.F;
-		add.add = bdds.F;
-		del.del = bdds.F;
-		q.db = q.get_varbdd();
-		q.fwd(add, del, 0);
-		console.log(this.printbdd('', add.add));
-		return true;
-	}
 }
 
-// loads string from stream
-function load_stream(stream) {
-	return new Promise((resolve, reject) => {
-		let r = '';                         // resulting string
-		stream.on('readable', () => {       // if we can read
-			let chunk;
-			while ((chunk = stream.read()) !== null)
-				r += chunk;                 // add stream chunks to string
-		});
-		stream.on('end', () => resolve(r)); // resolve string
-		stream.on('error', reject);         // reject if error
-	});
-}
 
-// main
-async function main() {
-	let s = null;
-	//// input for IDE debugging (avoids configuration of stdin)
-	// s = "e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.";
-	// s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
-	// s = "1 2. 2 1. ?x ?y :- ?y ?x.";
-	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
-	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
-	// unless s, read source from stdin
-	if (s === null) {
-		try {
-			process.stdin.setEncoding('utf8');
-			s = await load_stream(process.stdin);
-		} catch (err) {   // stdin read error
-			console.log('Read error:', err);
-			return 4;
-		}
-	}
-	const proof = process.argv.length === 3 && process.argv[2] === '-p';
-	const d = new driver(s, proof);
-	let r = false;
-	try {
-		r = d.pfp(proof); // run pfp logic program
-	} catch (err) {
-		console.log('PFP error', err);
-		return 2;
-	}
-	if (!r) {
-		console.log('unsat');
-		return 1;
-	}
-	return 0;
-}
-
-module.exports = { main, driver, lp };
+module.exports = { driver, lp };

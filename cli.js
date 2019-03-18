@@ -2,4 +2,4 @@
 
 "use strict";
 
-require('./build/driver.js').main();
+require('./build/main.js').main();

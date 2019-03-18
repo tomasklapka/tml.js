@@ -22,6 +22,18 @@
 //##   define apply_ret(r, m) return r
 //## endif
 
+//## define getnode(x) this.V[x]
+//## define leaf(x) (((x) === bdds.T) || ((x) === bdds.F))
+//## define nleaf(x) ((x).v === 0)
+//## define trueleaf(x) ((x) === bdds.T)
+//## define ntrueleaf(x) (nleaf(x) && (x).hi > 0)
+//## undef from_bit
+//## define from_bit(x, v) (this.add((v) \
+//#        ? new node(x+1, bdds.T, bdds.F) \
+//#        : new node(x+1, bdds.F, bdds.T)))
+//## undef from_int_and
+//## define from_int_and(x, y, o, r) r = this.and(r, this.from_int(x, y, o))
+
 // node in a bdd tree
 class node {
 	// initialize node
@@ -45,7 +57,8 @@ class bdds {
 	get length() { return this.V.length; }
 	// initialize bdds
 	constructor() {
-		this._id = ++__counters.bdds;
+		ID('bdds')
+		DBG(this.__id = id);
 		this.V = [];          // all nodes
 		this.M = {};          // node to its index
 		// initialize bdd with 0 and 1 terminals
@@ -54,27 +67,27 @@ class bdds {
 		this.memos_clear();
 	}
 	_count(x, nvars) {
-		const n = this.getnode(x);
+		const n = getnode(x);
 		let k;
 		let r = 0;
-		if (bdds.leaf(n)) return bdds.trueleaf(n) ? 1 : 0;
-		k = this.getnode(n.hi);
-		r += this.count(n.hi, nvars)*(1<<(((bdds.leaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		if (nleaf(n)) return ntrueleaf(n) ? 1 : 0;
+		k = getnode(n.hi);
+		r += this.count(n.hi, nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
 		k = getnode(n[2]);
-		r += count(n[2], nvars)*(1<<(((bdds.leaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
+		r += count(n[2], nvars)*(1<<(((nleaf(k)?nvars+1-n[0]:(k[0]-n[0])))-1));
 		return r;
 	}
 	count(x, nvars) {
 		return x < 2
 			? x
-				? (1<<(nvars))
+				? (1 << nvars)
 				: 0
-			: (this._count(x, nvars) << (this.getnode(x).v-1));
+			: (this._count(x, nvars) << (getnode(x).v-1));
 	}
 	onesat(x, nvars, r) {
-		if (bdds.leaf(x)) return bdds.trueleaf(x);
-		let n = this.getnode(x);
-		if (bdds.leaf(n.lo) && !bdds.trueleaf(n.lo)) {
+		if (leaf(x)) return trueleaf(x);
+		let n = getnode(x);
+		if (leaf(n.lo) && !trueleaf(n.lo)) {
 			r[n.v-1] = true;
 			return this.onesat(n.hi, nvars, r);
 		}
@@ -82,62 +95,54 @@ class bdds {
 		return this.onesat(n.lo, nvars, r);
 	}
 
-	from_int_and(x, y, o, r) {
-		return this.and(r, this.from_int(x, y, o));
-	}
-
 	from_int(x, bits, offset) {
 		ID('from_int');
 		TRC(`from_int-${id}`);
 		let r = bdds.T;
 		let b = bits--;
-		while (b--) r = this.and(r, this.from_bit(bits - b + offset, x & (1 << b)));
+		while (b--) r = this.and(r, from_bit(bits-b+offset, x&(1<<b)));
 		return r;
+	}
+
+	from_range(max, bits, offset, r) {
+		ID_TRC('from_range');
+		let x = bdds.F;
+		for (let n = 1; n != max; ++n) {
+			x = this.or(x, this.from_int(n, bits, offset));
+		}
+		return this.and(r, x);
 	}
 
 	pad(x, ar1, ar2, p, bits) {
 		for (let n = ar1; n != ar2; ++n) {
-			x = this.from_int_and(p, bits, n * bits, x);
+			x = from_int_and(p, bits, n * bits, x);
 		}
 		return x;
 	}
 
+	rebit(x, prev, curr, nvars) {
+		if (prev == curr) return x;
+		if (prev > curr) throw new Error('assert prev < curr');
+		const v = Array(nvars);
+		let t = bdds.T;
+		for (let n = 0; n != nvars; ++n) {
+			v[n] = (n % prev) + curr - prev + curr * (n / prev);
+			for (let k = 0; k != curr - prev; ++k) {
+				t = this.and(t, from_bit((n / prev) * curr + k, false));
+			}
+		}
+		return this.and(t, this.permute(x, v));
+	}
+
 	// add node directly without checking
 	add_nocheck(n) {
-		ID('add_nocheck');
-		TRC(`add_nocheck-${id}`);
+		ID_TRC('add_nocheck');
 		const r = this.V.length;
 		this.M[n.key] = r;
 		this.V.push(n);
 		return r;
 	}
-	// returns node by its index
-	getnode(nid) { return this.V[nid]; }
-	// checks if node is terminal (leaf)
-	static leaf(n) {
-		const res = n instanceof node
-			? n.v === 0
-			: n === bdds.T || n === bdds.F;
-		DBG(__leaf(`${res ? ' is' : 'not'} leaf ${n instanceof node ? n.key : n}`));
-		return res;
-	}
-	// checks if node is terminal and is T
-	static trueleaf(n) {
-		const res = n instanceof node
-			? bdds.leaf(n) && (n.hi > 0)
-			: n === bdds.T;
-		DBG(__leaf(`leaf ${n instanceof node ? n.key : n} is ${res}`));
-		return res;
-	}
 
-	from_bit(x, v) {
-		const n = v === true || v > 0
-			? new node(x + 1, bdds.T, bdds.F)
-			: new node(x + 1, bdds.F, bdds.T);
-		const res = this.add(n);
-		DBG(__bdd(`from_bit x:${x}, v:${v}, n:${n.key}, res:${res}`));
-		return res;
-	}
 	// adds new node
 	add(n) {
 		ID('add');
@@ -156,9 +161,8 @@ class bdds {
 	}
 
 	sat(v, nvars, n, p, r) {
-		ID('sat');
-		TRC(`sat-${id}`);
-		if (bdds.leaf(n) && !bdds.trueleaf(n)) return;
+		ID_TRC('sat');
+		if (nleaf(n) && !ntrueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
 			this.sat(v+1, nvars, n, p, r);
@@ -167,9 +171,9 @@ class bdds {
 		} else {
 			if (v !== nvars+1) {
 				p[v-1] = true;
-				this.sat(v+1, nvars, this.getnode(n.hi), p, r);
+				this.sat(v+1, nvars, getnode(n.hi), p, r);
 				p[v-1] = false;
-				this.sat(v+1, nvars, this.getnode(n.lo), p, r);
+				this.sat(v+1, nvars, getnode(n.lo), p, r);
 			}	else {
 				r.push(p.slice());
 			}
@@ -178,13 +182,12 @@ class bdds {
 
 	allsat(x, nvars) {
 		const p = Array(nvars).fill(false); const r = [];
-		this.sat(1, nvars, this.getnode(x), p, r)
+		this.sat(1, nvars, getnode(x), p, r)
 		return r;
 	}
 
 	or(x, y) {
-		ID('or');
-		TRC(`or-${id} (${x} or ${y})`);
+		ID_TRC('or');
 		if (x === y) return x;
 //## ifdef MEMO
 		const t = x+'.'+y;
@@ -193,15 +196,15 @@ class bdds {
 			return this.memo_or[t];
 		}
 //## endif
-		const xn = this.getnode(x).clone();
-		if (bdds.leaf(xn)) {
-			const r = bdds.trueleaf(xn) ? bdds.T : y;
+		const xn = getnode(x).clone();
+		if (nleaf(xn)) {
+			const r = ntrueleaf(xn) ? bdds.T : y;
 			DBG(__or(`/or-${id} ${r} (${x} or2 ${y}) xn is leaf`));
 			apply_ret(r, this.memo_or);
 		}
-		const yn = this.getnode(y).clone();
-		if (bdds.leaf(yn)) {
-			const r = bdds.trueleaf(yn) ? bdds.T : x;
+		const yn = getnode(y).clone();
+		if (nleaf(yn)) {
+			const r = ntrueleaf(yn) ? bdds.T : x;
 			DBG(__or(`/or-${id} ${r} (${x} or3 ${y}) yn is leaf`));
 			apply_ret(r, this.memo_or);
 		}
@@ -241,18 +244,18 @@ class bdds {
 			return this.memo_ex[t];
 		}
 //## endif
-		if (bdds.leaf(x)) {
+		if (leaf(x)) {
 			DBG(__ex(`/ex-${id} ${x} (${x} ex2 ${b.map(n=>n?'1':'0').join('')}) x is leaf`));
 			return x;
 		}
-		let n = this.getnode(x);
+		let n = getnode(x);
 		while (b[n.v-1] === true || b[n.v-1] > 0) {
 			x = this.or(n.hi, n.lo);
-			if (bdds.leaf(x)) {
+			if (leaf(x)) {
 				DBG(__ex(`/ex-${id} ${x} (${x} ex3 ${b.map(n=>n?'1':'0').join('')}) x is leaf2`));
 				apply_ret(x, this.memo_ex);
 			}
-			n = this.getnode(x);
+			n = getnode(x);
 		}
 		const hi = this.ex(n.hi, b);
 		const lo = this.ex(n.lo, b);
@@ -273,15 +276,15 @@ class bdds {
 			return this.memo_and[t];
 		}
 //## endif
-		const xn = this.getnode(x).clone();
-		if (bdds.leaf(xn)) {
-			const r = bdds.trueleaf(xn) ? y : bdds.F;
+		const xn = getnode(x).clone();
+		if (nleaf(xn)) {
+			const r = ntrueleaf(xn) ? y : bdds.F;
 			DBG(__and(`/and-${id} ${r} (${x} and2 ${y}) xn is leaf`));
 			apply_ret(r, this.memo_and);
 		}
-		const yn = this.getnode(y).clone();
-		if (bdds.leaf(yn)) {
-			const r = !bdds.trueleaf(yn) ? bdds.F : x;
+		const yn = getnode(y).clone();
+		if (nleaf(yn)) {
+			const r = !ntrueleaf(yn) ? bdds.F : x;
 			DBG(__and(`/and-${id} ${r} (${x} and3 ${y}) yn is leaf`));
 			apply_ret(r, this.memo_and);
 		}
@@ -322,14 +325,14 @@ class bdds {
 			return this.memo_and_not[t];
 		}
 //## endif
-		const xn = this.getnode(x).clone();
-		if (bdds.leaf(xn) && !bdds.trueleaf(xn)) {
+		const xn = getnode(x).clone();
+		if (nleaf(xn) && !ntrueleaf(xn)) {
 			DBG(__and_not(`/and_not-${id} 0 (${x} and not2 ${y}) xn is leaf`));
 			apply_ret(bdds.F, this.memo_and_not);
 		}
-		const yn = this.getnode(y).clone();
-		if (bdds.leaf(yn)) {
-			const r = bdds.trueleaf(yn) ? bdds.F : x;
+		const yn = getnode(y).clone();
+		if (nleaf(yn)) {
+			const r = ntrueleaf(yn) ? bdds.F : x;
 			DBG(__and_not(`/and_not-${id} ${r} (${x} and not3 ${y}) yn is leaf`));
 			apply_ret(r, this.memo_and_not);
 		}
@@ -369,11 +372,11 @@ class bdds {
 			return this.memo_deltail[t];
 		}
 //## endif
-		if (bdds.leaf(x)) {
+		if (leaf(x)) {
 			DBG(__deltail(`/deltail-${id} ${x} (${x}, ${h}) leaf`));
 			return x;
 		}
-		const n = this.getnode(x).clone();
+		const n = getnode(x).clone();
 		if (n.v > h) {
 			const r = n.hi === bdds.F && n.lo === bdds.F ? bdds.F : bdds.T;
 			DBG(__deltail(`/deltail-${id} ${r} (${x}, ${h}) (${n.v} > ${h}) n:${n.key}`));
@@ -397,15 +400,15 @@ class bdds {
 			return this.memo_and_deltail[t];
 		}
 //## endif
-		const xn = this.getnode(x).clone();
-		if (bdds.leaf(xn)) {
-			const r = bdds.trueleaf(xn) ? this.deltail(y, h) : bdds.F;
+		const xn = getnode(x).clone();
+		if (nleaf(xn)) {
+			const r = ntrueleaf(xn) ? this.deltail(y, h) : bdds.F;
 			DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail2 ${y}, ${h}) xn is leaf`));
 			apply_ret(r, this.memo_and_deltail);
 		}
-		const yn = this.getnode(y).clone();
-		if (bdds.leaf(yn)) {
-			const r = !bdds.trueleaf(yn) ? bdds.F : this.deltail(x, h);
+		const yn = getnode(y).clone();
+		if (nleaf(yn)) {
+			const r = !ntrueleaf(yn) ? bdds.F : this.deltail(x, h);
 			DBG(__and_deltail(`/and_deltail-${id} ${r} (${x} and_deltail3 ${y}, ${h}) yn is leaf`));
 			apply_ret(r, this.memo_and_deltail);
 		}
@@ -442,8 +445,8 @@ class bdds {
 		if (1 === (v.length - from)) {
 			return v[from];
 		}
-		while (bdds.leaf(v[from])) {
-			if (!bdds.trueleaf(v[from])) {
+		while (leaf(v[from])) {
+			if (!trueleaf(v[from])) {
 				return bdds.F;
 			} else {
 				if (1 === (v.length - ++from)) {
@@ -452,15 +455,15 @@ class bdds {
 			}
 		}
 		let t = v[from];
-		let m = this.getnode(t).v;
+		let m = getnode(t).v;
 		let b = false;
 		let eq = true;
 		for (let i = from + 1; i != v.length; ++i) {
-			if (bdds.leaf(v[i])) {
-				if (!bdds.trueleaf(v[i])) return bdds.F;
+			if (leaf(v[i])) {
+				if (!trueleaf(v[i])) return bdds.F;
 				continue;
 			}
-			const n = this.getnode(v[i]);
+			const n = getnode(v[i]);
 			b |= n.v != m;
 			eq &= t === v[i];
 			if (n.v < m) m = n.v;
@@ -469,15 +472,15 @@ class bdds {
 		const v1 = Array(v.length - from);
 		const v2 = Array(v.length - from);
 		for (let i = from; i != v.length; ++i) {
-			if (!b || this.getnode(v[i]).v === m) {
-				v1.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).hi);
+			if (!b || getnode(v[i]).v === m) {
+				v1.push(leaf(v[i]) ? v[i] : getnode(v[i]).hi);
 			} else {
 				v1.push(v[i]);
 			}
 		}
 		for (let i = from; i != v.length; ++i) {
-			if (!b || this.getnode(v[i]).v === m) {
-				v2.push(bdds.leaf(v[i]) ? v[i] : this.getnode(v[i]).lo);
+			if (!b || getnode(v[i]).v === m) {
+				v2.push(leaf(v[i]) ? v[i] : getnode(v[i]).lo);
 			} else {
 				v2.push(v[i]);
 			}
@@ -490,20 +493,20 @@ class bdds {
 	ite(v, t, e) {
 		ID('ite');
 		TRC(`ite-${id} (v:${v}, t:${t}, e:${e})`);
-		const x = this.getnode(t);
-		const y = this.getnode(e);
+		const x = getnode(t);
+		const y = getnode(e);
 		DBG(__ite(`-ite-${id} (x:${x.key}, y:${y.key})`));
-		if ((bdds.leaf(x) || v < x.v)
-		&&  (bdds.leaf(y) || v < y.v)) {
+		if ((nleaf(x) || v < x.v)
+		&&  (nleaf(y) || v < y.v)) {
 			DBG(__ite(`-ite-${id} leafs`));
 			const n = new node(v + 1, t, e);
 			const r = this.add(n);
 			DBG(__ite(`/ite1-${id} (v:${v}, t:${t} ${x.key}, e:${e} ${y.key}) = ${r} (${n.key})`));
 			return r;
 		}
-		const lo = this.and(this.from_bit(v, false), e);
+		const lo = this.and(from_bit(v, false), e);
 		DBG(__ite(`-ite-${id} lo: ${lo}`));
-		const hi = this.and(this.from_bit(v, true), t);
+		const hi = this.and(from_bit(v, true), t);
 		DBG(__ite(`-ite-${id} hi: ${hi}`));
 		const r = this.or(hi, lo);
 		DBG(__ite(`/ite2-${id} (v:${v}, t:${t} (${x.key}), e:${e}) (${y.key}) = ${r} (hi:${hi}, lo:${lo})`));
@@ -520,11 +523,11 @@ class bdds {
 			return this.memo_permute[t];
 		}
 //## endif
-		if (bdds.leaf(x)) {
+		if (leaf(x)) {
 			DBG(__permute(`/permute(${id}) = ${x} (${x} permute2 ${m.join(',')}) x is leaf`));
 			return x;
 		}
-		const n = this.getnode(x);
+		const n = getnode(x);
 		const lo = this.permute(n.lo, m);
 		DBG(__permute(`-permute-${id} lo: ${lo}`));
 		const hi = this.permute(n.hi, m);
@@ -532,22 +535,6 @@ class bdds {
 		const r = this.ite(m[n.v-1], hi, lo);
 		DBG(__permute(`/permute-${id} = ${r} (${x} permute3 ${m.join(',')}) hi: ${hi}, lo: ${lo}, n.v:${n.v}, m[n.v-1]:${m[n.v-1]}`));
 		apply_ret(r, this.memo_permute);
-	}
-
-	from_eq(x, y) { // a bdd saying "x=y"
-		const n = new node();
-		if (x < y) {
-			n.v = x+1;
-			n.lo = this.from_bit(y, false);
-			n.hi = this.from_bit(y, true);
-		} else {
-			n.v = y+1;
-			n.lo = this.from_bit(x, false);
-			n.hi = this.from_bit(x, true);
-		}
-		const res = this.add(n);
-		DBG(__bdd(`from_eq x:${x} y:${y} = ${res}`));
-		return res;
 	}
 
 	memos_clear() {

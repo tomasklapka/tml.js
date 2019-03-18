@@ -14,7 +14,6 @@
 
 "use strict";
 
-// messages
 const m = {}; module.exports = m;
 m.err_proof         = `proof extraction yet unsupported for programs with negation or deletion.\n`;
 m.dot_expected      = "'.' expected.\n";
@@ -37,3 +36,7 @@ m.err_body          = "rules' body expected.\n";
 m.err_term_or_dot   = "term or dot expected.\n";
 m.err_close_curly   = "'}' expected.\n";
 m.err_fnf           = "file not found.\n";
+m.err_sym_digit     = "symbol name cannot begin with a digit\n";
+m.err_goal_arity    = "goal arity larger than the program's\n";
+m.err_goal_sym      = "goal symbol not appearing in program.\n";
+m.err_null_in_head  = "'null' not allowed to appear in the head of positive rules.\n";

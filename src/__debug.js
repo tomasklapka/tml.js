@@ -4,7 +4,6 @@ const __dict        = __d('tml:dict');
 const __pfp         = __d('tml:pfp');
 const __bdd         = __d('tml:bdd');
 const __add         = __d('tml:bdd:add');
-const __leaf        = __d('tml:bdd:leaf');
 const __or          = __d('tml:bdd:or');
 const __ex          = __d('tml:bdd:ex');
 const __and         = __d('tml:bdd:and');

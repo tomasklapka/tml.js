@@ -16,265 +16,235 @@
 
 //## include "__common.h"
 
-const { err_proof } = require('./messages');
 const { bdds } = require('./bdds');
+const { err_goal_arity, err_goal_sym } = require('./messages');
 
 const bdd = new bdds();
 const pad = 0;
 
-function from_range(max, bits, offset, r) {
-	ID('from_range');
-	TRC(`from_range-${id}`);
-	let x = bdds.F;
-	for (let n = 1; n != max; ++n) {
-		x = bdd.or(x, bdd.from_int(n, bits, offset));
+function fact(v, bits) {
+	let r = bdds.T;
+	const m = {};
+	for (let j = 0; j != v.length; ++j) {
+		if (v[j+1] >= 0) from_int_and(v[j+1], bits, j * bits, r);
+		else if (!m.hasOwnProperty(v[j+1])) m[v[j+1]] = j;
+		else {
+			const pos = m[v[j+1]] * bits;
+			for (let b = 0; b != bits; ++b) {
+				r = bdd.and(r, from_eq(j*bits+b, pos+b));
+			}
+		}
 	}
-	return bdd.and(r, x);
+	return v[0] < 0
+		? bdd.and_not(bdds.T, r)
+		: r;
 }
 
-function varcount(v) {
-	const vars = [];
-	for (let i = 0; i != v.length; ++i) {
-		for (let j = 1; j != v[i].length; ++j) {
-			if (v[i][j] < 0 && !vars.includes(v[i][j])) vars.push(v[i][j]);
-		}
-	}
-	return vars.length;
-}
-
-class rule_body {
-	constructor(t, ar, bits, dsz, nvars, eqs) {
-		this.eqs = eqs;
-		this.neg = t[0] < 0;
-		this.sel = bdds.T;
-		this.ex = new Array(bits * ar).fill(false);
-		this.perm = new Array((ar + nvars) * bits);
-		t.shift();
-		for (let b = 0; b != (ar + nvars) * bits; ++b) {
-			this.perm[b] = b;
-		}
-		const m = {};
-		DBG(__rule(`rb1`));
-		for (let j = 0; j != ar; ++j) {
-			DBG(__rule(`rbj`, j));
-			this.from_arg(t[j], j, bits, dsz, m)
-		}
-		DBG(__rule(`rb2`));
-	}
-
-	from_arg(vij, j, bits, dsz, m) {
-		ID('from_arg');
-		TRC(`from_arg-${id}`);
-		const eq = [];
-		if (vij >= 0) {
-			this.ex.fill(true, j * bits, (j+1) * bits);
-			this.sel = bdd.from_int_and(vij, bits, j * bits, this.sel);
-		} else {
-			if (m.hasOwnProperty(vij)) {
-				this.ex.fill(true, j * bits, (j+1) * bits);
-				for (let b = 0; b != bits; ++b) {
-					eq.push([ j * bits + b, m[vij] * bits + b ]);
-				}
-			} else {
-				m[vij] = j;
-				this.sel = from_range(dsz, bits, j * bits, this.sel);
-			}
-		}
-		for (let j = 0; j != eq.length; ++j) {
-			if (!(j % 8)) this.eqs.push(bdds.T);
-			const e = this.eqs.length-1;
-			this.eqs[e] = bdd.and(
-				this.eqs[e],
-				bdd.from_eq(eq[j][0], eq[j][1]));
-		}
-
-	}
-
-	varbdd(db, p) {
-		DBG(__varbdd(`varbdd(db: ${db} p:`, p, `this:`, this, `)`));
-		const sb = this.neg ? p.neg : p.pos;
-		const key = this.sel+'.'+this.ex.join(',');
-		if (sb.hasOwnProperty(key)) {
-			const res = bdd.permute(sb[key], this.perm);
-			DBG(__varbdd(`varbdd key = ${key} res =`, res));
-			return res;
-		}
-		let r = this.neg
-			? bdd.and_not(this.sel, db)
-			: bdd.and(this.sel, db);
-		let n = this.eqs.length;
-		while (n) {
-			r = bdd.and(r, this.eqs[--n]);
-			if (bdds.F === r) return bdds.F;
-		}
-		r = bdd.ex(r, this.ex);
-		sb[key] = r;
-		const res = bdd.permute(r, this.perm);
-		DBG(__varbdd("varbdd res =", res));
-		return res;
-	};
-}
-
-// a P-DATALOG rule in bdd form
-class rule {
-	// initialize rule
-	constructor(v, bits, dsz, proof) {
-		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
-		this.hsym = bdds.T;
-		this.proof_arity = 0;
-		this.sels = [];
-		this.bd = [];
-		this.eqs = [];
-		this.p = [];
-		const ar = v[0].length - 1;
-		let k = ar;
-		this.neg = v[0][0] < 0;
-		v[0].shift();
-		const nvars = varcount(v);
-		for (let i = 1; i != v.length; ++i) {
-			this.bd.push(new rule_body(v[i], ar, bits, dsz, nvars, this.eqs));
-		}
-		const heq = [];
-		const m = {};
-		for (let j = 0; j != ar; ++j) {
-			if (v[0][j] >= 0) {
-				this.hsym = bdd.from_int_and(v[0][j], bits, j * bits, this.hsym);
-			} else {
-				if (m.hasOwnProperty(v[0][j])) {
-					for (let b = 0; b != bits; ++b) {
-						heq.push([ j * bits, m[v[0][j]] * bits + b ]);
-					}
-				} else {
-					m[v[0][j]] = j;
-				}
-			}
-		}
-		for (let j = 0; j != heq.length; ++j) {
-			if (!(j % 8)) this.eqs.push(bdds.T);
-			const e = this.eqs.length-1;
-			this.eqs[e] = bdd.and(
-				this.eqs[e],
-				bdd.from_eq(heq[j][0], heq[j][1]));
-		}
-		DBG(__rule(`2`, v));
-		for (let i = 0; i != v.length-1; ++i) {
-			DBG(__rule('i', i));
-			for (let j = 0; j != ar; ++j) {
-				DBG(__rule('j', j));
-				DBG(__rule('v[i+1][j]', v[i+1][j]));
-				if (v[i+1][j] < 0) {
-					if (!m.hasOwnProperty(v[i+1][j])) {
-						m[v[i+1][j]] = k++;
-					}
-					for (let b = 0; b != bits; ++b) {
-						this.bd[i].perm[b+j*bits] = b + m[v[i+1][j]] * bits;
-					}
-				}
-			}
-		}
-		this.vars_arity = k;
-		if (!proof || v.length === 1) return;
-		if (neg) throw new Error(err_proof);
-		for (let i = 0; i != this.bd.length; ++i) {
-			if (this.bd[i].neg) throw new Error(err_proof);
-		}
-		const prf = [ [ 1 ], [ 1 ] ];
-		prf[0] = prf[0].concat(v[0]);
-		prf[1] = prf[1].concat(v[0]);
-		for (let i = 0; i != m.length; ++i) {
-			if (m[i] >= ar) { prf[1].push(i); }
-		}
-		for (let i = 0; i != this.bd.length; ++i) {
-			prf[0] = prf[0].concat(v[i+1]);
-		}
-		for (let j = 0; j != prf[0].length; ++j) {
-			if (prf[0][j] === pad) {
-				prf[0].splice(j--, 1);
-			}
-		}
-		for (let i = 0; i != prf.length; ++i) {
-			this.proof_arity = Math.max(
-				this.proof_arity,
-				prf[i].length - 1)
-		}
-		proof.push(prf);
-	}
-
-	fwd(db, bits, ar, s, p) {
-		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`,s,`p:`,p,`)`));
-		let vars = bdds.T;
-		for (let i = 0; i < this.bd.length; i++) {
-			vars = bdd.and(vars, this.bd[i].varbdd(db, s));
-			if (bdds.F === vars) return bdds.F;
-		}
-		for (let n = this.eqs.length; n; ) {
-			vars = bdd.and(vars, this.eqs[--n]);
-			if (bdds.F === vars) return bdds.F;
-		}
-		vars = bdd.and(vars, this.hsym);
-		if (p && !this.p.includes(vars)) this.p.push(vars);
-		DBG(__pfp(`rule.fwd 5 vars`, vars));
-		return bdd.deltail(vars, bits * ar);
-	}
-
-	get_varbdd(bits, ar) {
-		let x = bdds.T;
-		let y = bdds.F;
-		for (let i = 0; i != this.p.length; ++i) {
-			y = bdd.or(y, this.p[i]);
-		}
-		for (let n = this.vars_arity; n != ar; ++n) {
-			x = bdd.from_int_and(pad, bits, n * bits, x);
-		}
-		return bdd.and(x, y);
-	}
+function align(x, par, pbits, ar, bits) {
+	return bdd.pad(bdd.rebit(x, pbits, bits, ar*bits), par, ar, pad, bits);
 }
 
 // [pfp] logic program
 class lp {
-	constructor(maxbits, arity, dsz) {
+	constructor(r, g, pg, prev) {
 		ID('lp');
 		DBG(this.__id = id);
-		this.bdd = bdd; // keep link to the bdd
-		this.db = bdds.F;
-		this.rules = [];     // p-datalog rules
-		this.ar = arity;
-		this.dsz = dsz;
-		this.bits = maxbits;
-		this.p = { pos: {}, neg: {} };
-		this._proof_arity = null;
+		this.bdd = bdd; // keep reference to the "global" bdd
+		this.pad = pad;
+		this.db = bdds.F; // db root
+		this.gbdd = bdds.F;
+		this.proof1 = null; // lp
+		this.proof2 = null; // lp
+		this.rules = []; // p-datalog rules
+		this.cache = { pos: {}, neg: {} }; // step
+		this.goals = [];
+		this.pgoals = JSON.parse(JSON.stringify(pg));
+		this.prev = prev; // lp
+		this.dsz = 0;
+		if (prev) this.ar = prev.ar;
+		else this.ar = 0;
+		for (let i = 0; i != r.length; ++i) {
+			for (let j = 0; j != r[i].length; ++j) {
+				this.ar = Math.max(this.ar, r[i][j].length -1);
+				for (let k = 0; k != r[i][j].length; ++k) {
+					if (r[i][j][k] > 0) this.dsz = Math.max(this.dsz, r[i][j][k]);
+				}
+			}
+		}
+		this.dsz = Math.max(prev ? prev.dsz : this.dsz+1, this.dsz+1);
+		for (let i = 0; i != g.length; ++i) {
+			for (let j = 0; j != g[i].length; ++j) {
+				const t = g[i][j];
+				if (t.length-1 > this.ar) throw new Error(err_goal_arity);
+				else for (let k = 0; k != t.length; ++k) {
+					if (t[k] > 0 && t[k] >= this.dsz) throw new Error(err_goal_sym);
+				}
+			}
+		}
+		for (let i = 0; i != this.pgoals.length; ++i) { const t = this.pgoals[i];
+			if (t.length-1 > this.ar) throw new Error(err_goal_arity);
+			else for (let k = 0; k != t.length; ++k) {
+				if (t[k] > 0 && t[k] >= this.dsz) throw new Error(err_goal_sym);
+			}
+		}
+		this.rules_pad(r);
+		this.rules_pad(g);
+		this.rules_pad(pg);
+		this.bits = msb(this.dsz);
+		for (let i = 0; i != r.length; ++i) {
+			if (r[i].length === 1) {
+				DBG(__rule('rule_add fact'));
+				this.db = bdd.or(this.db, fact(r[i][0], this.bits));
+			} else {
+				DBG(__rule('rule_add rule'));
+				const rule = new rule(x, this.bits, this.dsz, this.pgoals, this.nul, this.pad);
+				this.rules.push(rule);
+			}
+		}
+		if (pgoals.length) {
+			this.proof1 = new lp(this.get_proof1(), [], [], this);
+			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1);
+		}
+		for (let i = 0; i != g; ++g) {
+			this.gbdd = bdd.or(this.gbdd, fact(g[i], this.bits));
+		}
+	}
+
+	get_proof1() {
+		const p = [];
+		for (let i = 0; i != this.rules.length; ++i) {
+			p[p.length] = r.proof1;
+		}
+		return p;
+	}
+
+	get_proof2() {
+		const p = [];
+		const m = [];
+		for (let i = 0; i != this.rules.length; ++i) {
+			p[p.length] = r.proof2;
+		}
+		for (let i = 0; i != this.pgoals.length; ++i) {
+			m[0] = this.pgoals[i];
+			m[0] = m[0].concat
+		}
 	}
 
 	getbdd(t) { return this.from_bits(t); }
 
 	getdb() { return this.getbdd(this.db); }
-	// single pfp step
-	rule_add(x, proof) {
-		ID('rule_add');
-		TRC(`rule_add-${id}`);
-		DBG(__rule(`rule_add() x:`, x, this.bits, this.dsz, proof));
-		if (x.length === 1) {
-			DBG(__rule('rule_add fact'));
-			const r = new rule(x, this.bits, this.dsz, false);
-			this.db = bdd.or(this.db, r.hsym); // fact
-		} else {
-			DBG(__rule('rule_add rule'));
-			const r = new rule(x, this.bits, this.dsz, proof);
-			this.rules.push(r);
+
+	term_pad(t) {
+		const l = t.length;
+		if (l < this.ar + 1) {
+			t = t.concat(Array(this.ar + 1 - l).fill(pad));
 		}
 	}
 
-	fwd(add, del, proof) {
-		DBG(__pfp(`lp.fwd(add: ${add.add}, del: ${del.del}, proof: `,proof,`)`))
-		this.p.pos = {}; this.p.neg = {};
+	rule_pad(t) {
+		const r = t.slice();
+		for (let i = 0; i != r.length; ++i) {
+			r[i] = r[i].slice();
+			this.term_pad(r[i], ar);
+		}
+		return r;
+	}
+
+	rules_pad(t) {
+		const r = t.splice(0, t.length);
+		for (let i = 0; i != r.length; ++i) {
+			t[t.length] = this.rule_pad(r[i]);
+
+		}
+	}
+
+	fwd(add, del) {
+		DBG(__pfp(`lp.fwd(add: ${add.add}, del: ${del.del})`))
+		this.cache.pos = {}; this.cache.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
 			const r = this.rules[i];
 			const t = bdd.or(
-				r.fwd(this.db, this.bits, this.ar, this.p, proof),
+				r.fwd(this.db, this.bits, this.ar, this.cache),
 				r.neg ? del.del : add.add);
 			DBG(__pfp(`lp.fwd...i:${i} t:${t}`));
 			if (r.neg) { del.del = t; } else { add.add = t; }
 		}
+		DBG(this.drv.printbdd("add:\n", this, add));
+		DBG(this.drv.printbdd("del:\n", this, del));
+	}
+
+	pfp() {
+		ID_TRC('lp.pfp');
+		if (this.prev) {
+			if (!this.prev.pfp()) return false;
+			this.db = bdd.or(this.db,
+				align(
+					this.prev.db, this.prev.ar, this.prev.bits,
+					this.ar, this.bits));
+		}
+		let d;                       // current db root
+		let t = 0;
+		let step = 0;                // step counter
+		const s = [];                // db roots of previous steps
+		const add = {};
+		const del = {};
+		for (;;) {
+			add.add = bdds.F;
+			del.del = bdds.F;
+			d = this.db;       // get current db root
+			s.push(d);           // store current db root into steps
+			DBG(__pfp(`____________________STEP_${++step}________________________`))
+			DBG(__pfp(`                                                     `))
+			this.fwd(add, del);         // do pfp step
+			DBG(__pfp(`___________________/STEP_${step}________________________`))
+			t = bdd.and_not(add.add, del.del);
+			DBG(__pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t))
+			if (t === bdds.F && add.add !== bdds.F) {
+				DBG(__pfp('db set (contradiction):', this.db));
+				return false;
+			} else {
+				this.db = bdd.or(p.bdd.and_not(this.db, del.del), t);
+				DBG(__pfp('db set:', this.db));
+			}
+			// if db root already resulted from any previous step
+			if (d === this.db) break;
+			if (s.includes(this.db)) return false; // unsat
+		};
+		DBG(this.drv.printdb("after: ", this));
+		if (this.proof1) {
+			this.db = this.prove();
+			this.ar = this.proof2.ar;
+			this.bits = this.proof2.bits;
+			return true;
+		}
+		if (this.gbdd !== bdds.F) this.db = bdd.and(this.gbdd, this.db);
+		return true;
+	}
+
+	prove() {
+		const add = { add: bdds.F };
+		const del = { del: bdds.F };
+		this.proof1.db = this.get_varbdd(this.proof1.ar);
+		this.proof1.fwd(add, del);
+		this.proof1.db = bdd.or(this.proof2.db, add.add);
+		this.proof2.prev = null;
+		if (del !== bdds.F) throw new Error('assert del == F');
+		if (!proof2.pfp()) throw new Error('proof2.pfp unsat');
+		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.nul, 0))
+		if (this.gbdd === bdds.F) return t;
+		return bdd.and(this.gbdd, t);
+	}
+
+	get_varbdd(par) {
+		let t = bdds.T;
+		for (let i = 0; i != this.rules.length; ++i) {
+			t = bdd.or(r.get_varbdd(bits, par), t);
+		}
+		return t;
+	}
+
+	get_sym_bdd(sym, pos) {
+		return bdd.from_int(sym, this.bits, this.bits * pos);
 	}
 
 	from_bits(x) {
@@ -291,32 +261,47 @@ class lp {
 						r[n][i] |= 1 << (this.bits - b - 1);
 					}
 				}
-				if (r[n][i] === pad) break;
+				// if (r[n][i] === pad) break;
 			}
 		}
 		return r;
 	}
 
-	get_varbdd() {
-		let t = bdds.F;
-		for (let i = 0; i != this.rules.length; ++i) {
-			t = bdd.or(r.get_varbdd(bits, this.proof_arity()), t);
+	one_from_bits(x, bits, ar) {
+		const s = Array(bits * ar).fill(true);
+		if (!bdd.onesat(x, bits * ar, s)) return [];
+		const r = Array(ar).fill(0);
+		for (let i = 0; i != ar; ++i) {
+			for (let b = 0; b != bits; ++b) {
+				if (s[i * bits + b] > 0) {
+					r[i] |= 1 << (bits - b - 1);
+				}
+			}
+			// if (r[i] === pad) break;
 		}
-		return t;
+		return r;
 	}
 
-	proof_arity() {
-		if (this._proof_arity !== null) return this._proof_arity;
+	maxw() {
 		let r = 0;
 		for (let i = 0; i != this.rules.length; ++i) {
-			r = Math.max(r, this.rules[i].proof_arity);
+			r = Math.max(r, this.rules[i].bd.length);
 		}
-		this._proof_arity = r;
+		return r;
+	}
+
+	get_proof_rules() {
+		let r = [];
+		for (let i = 0; i != this.rules.length; ++i) {
+			r[r.length] = this.rules[i].proof
+		}
 		return r;
 	}
 }
 
+lp.pad = pad;
+lp.bdd = bdd;
+
 module.exports = {
-	lp,
-	pad
+	lp, pad
 }
