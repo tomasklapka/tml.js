@@ -23,14 +23,18 @@ function varcount(v) {
 	const vars = [];
 	for (let i = 0; i != v.length; ++i) {
 		for (let j = 1; j != v[i].length; ++j) {
-			if (v[i][j] < 0 && !vars.includes(v[i][j])) vars.push(v[i][j]);
+			if (v[i][j] < 0 && !vars.includes(v[i][j])) {
+				vars[vars.length] = v[i][j];
+			}
 		}
 	}
 	return vars.length;
 }
 
 class rule_body {
-	constructor(t, ar, bits, dsz, nvars, eqs) {
+	constructor(t, ar, bits, dsz, nvars, eqs, context) {
+		const bdd = context.bdd;
+		this.context = context;
 		this.eqs = eqs;
 		this.neg = t[0] < 0;
 		this.sel = bdds.T;
@@ -39,6 +43,11 @@ class rule_body {
 		t.shift();
 		for (let b = 0; b != (ar + nvars) * bits; ++b) {
 			this.perm[b] = b;
+		}
+		for (let j = 0; j != ar; ++j) {
+			if (t[j] >= 0) {
+				from_int_and(t[j], bits, j * bits, this.sel);
+			}
 		}
 		const m = {};
 		DBG(__rule(`rb1`));
@@ -53,22 +62,25 @@ class rule_body {
 		ID('from_arg');
 		TRC(`from_arg-${id}`);
 		const eq = [];
+		const ctx = this.context;
+		const bdd = ctx.bdd;
+		const exclude = [ ctx.pad, ctx.openp, ctx.closep ];
 		if (vij >= 0) {
 			this.ex.fill(true, j * bits, (j+1) * bits);
-			this.sel = from_int_and(vij, bits, j * bits, this.sel);
+			// this.sel = from_int_and(vij, bits, j * bits, this.sel);
 		} else {
 			if (m.hasOwnProperty(vij)) {
 				this.ex.fill(true, j * bits, (j+1) * bits);
 				for (let b = 0; b != bits; ++b) {
-					eq.push([ j * bits + b, m[vij] * bits + b ]);
+					eq[eq.length] = [ j * bits + b, m[vij] * bits + b ];
 				}
 			} else {
 				m[vij] = j;
-				this.sel = from_range(dsz, bits, j * bits, this.sel);
+				this.sel = bdd.from_range(dsz, bits, j * bits, exclude, this.sel);
 			}
 		}
 		for (let j = 0; j != eq.length; ++j) {
-			if (!(j % 8)) this.eqs.push(bdds.T);
+			if (!(j % 8)) this.eqs[this.eqs.length] = bdds.T;
 			const e = this.eqs.length-1;
 			this.eqs[e] = bdd.and(
 				this.eqs[e],
@@ -79,6 +91,7 @@ class rule_body {
 
 	varbdd(db, cache) {
 		DBG(__varbdd(`varbdd(db: ${db} cache:`, cache, `this:`, this, `)`));
+		const bdd = this.context.bdd;
 		const c = this.neg ? cache.neg : cache.pos;
 		const key = this.sel+'.'+this.ex.join(',');
 		if (c.hasOwnProperty(key)) {
@@ -108,8 +121,11 @@ class rule_body {
 // a P-DATALOG rule in bdd form
 class rule {
 	// initialize rule
-	constructor(v, bits, dsz, proof, nul, pad) {
-		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
+	constructor(v, bits, dsz, proof, context) {
+		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v, context));
+		const bdd = context.bdd;
+		const pad = context.pad;
+		this.context = context;
 		this.hsym = bdds.T;
 		this.vars_arity = null;
 		this.bd = [];
@@ -123,7 +139,7 @@ class rule {
 		v[0].shift();
 		const nvars = varcount(v);
 		for (let i = 1; i != v.length; ++i) {
-			this.bd.push(new rule_body(v[i], ar, bits, dsz, nvars, this.eqs));
+			this.bd[this.bd.length] = new rule_body(v[i], ar, bits, dsz, nvars, this.eqs, context);
 		}
 		const heq = [];
 		const m = {};
@@ -133,7 +149,7 @@ class rule {
 			} else {
 				if (m.hasOwnProperty(v[0][j])) {
 					for (let b = 0; b != bits; ++b) {
-						heq.push([ j * bits, m[v[0][j]] * bits + b ]);
+						heq[heq.length] = [ j * bits, m[v[0][j]] * bits + b ];
 					}
 				} else {
 					m[v[0][j]] = j;
@@ -141,7 +157,7 @@ class rule {
 			}
 		}
 		for (let j = 0; j != heq.length; ++j) {
-			if (!(j % 8)) this.eqs.push(bdds.T);
+			if (!(j % 8)) this.eqs[this.eqs.length] = bdds.T;
 			const e = this.eqs.length-1;
 			this.eqs[e] = bdd.and(
 				this.eqs[e],
@@ -168,11 +184,15 @@ class rule {
 		for (let i = 0; i != this.bd.length; ++i) {
 			if (this.bd[i].neg) throw new Error(err_proof);
 		}
+
+		// null rule :- varbdd
 		this.proof1 = [ [ 1, nul], [ 1 ] ];
 		this.proof1[0] = this.proof1[0].concat(v[0]);
 		this.proof1[1] = this.proof1[1].concat(v[0]);
 		for (let i = 0; i != m.length; ++i) {
-			if (m[i] >= ar) { this.proof1[1].push(i); }
+			if (m[i] >= ar) {
+				this.proof1[1][this.proof1[1].length] = i;
+			}
 		}
 		for (let i = 0; i != this.bd.length; ++i) {
 			this.proof1[0] = this.proof1[0].concat(v[i+1]);
@@ -182,48 +202,64 @@ class rule {
 				this.proof1[0][i] = nul;
 			}
 		}
-		let t = [];
+		let t = []; // null body :- null rule, null head
 		this.proof2 = [];
 		for (let i = 0; i != this.bd.length; ++i) {
-			t[0].push(1);
-			t[0].push(nul);
-			t[0] = t[0].concat(v[i+1]);
+			t[0] = t[0].concat([ 1, nul ], v[i+1]);
 			t[1] = this.proof1[0];
 			t[0] = t[0].concat(this.proof1[0].slice(2));
-			this.proof2.push(JSON.parse(JSON.stringify(t)));
+			this.proof2[this.proof2.length] =
+				JSON.parse(JSON.stringify(t));
 		}
 		for (let i = 0; i != v.length; ++i) {
-			t[i+2].push(1);
-			t[i+2].push(nul);
-			t[i+2] = t[i+2].concat(v[i]);
+			t[i+2] = t[i+2].concat([ 1, nul ], v[i]);
 		}
-		this.proof2.push(JSON.parse(JSON.stringify(t)));
+		this.proof2[this.proof2.length] =
+			JSON.parse(JSON.stringify(t));
 	}
 
 	fwd(db, bits, ar, s, p) {
 		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`,s,`p:`,p,`)`));
+		const bdd = this.context.bdd;
 		let vars = bdds.T;
-		for (let i = 0; i < this.bd.length; i++) {
-			vars = bdd.and(vars, this.bd[i].varbdd(db, s));
+		const v = Array(this.bd.length + this.eqs.length + 1);
+		let i = 0;
+		for (let j = 0; j != this.bd.length; ++j) {
+			vars = this.bd[j].varbdd(db, s)
 			if (bdds.F === vars) return bdds.F;
+			else v[i++] = vars;
 		}
-		for (let n = this.eqs.length; n; ) {
-			vars = bdd.and(vars, this.eqs[--n]);
-			if (bdds.F === vars) return bdds.F;
+		for (let j = 0; j != this.eqs.length; ++j) {
+			v[i++] = this.eqs[j];
 		}
-		vars = bdd.and(vars, this.hsym);
-		if (!this.proof2.length) p[p.length] = vars;
+		v[i] = this.hsym;
+		vars = bdd.and_many(v);
+		if (bdds.F === vars) return bdds.F;
+		if (this.proof2.length && !p.includes(vars)) p[p.length] = vars;
 		return bdd.deltail(vars, bits * ar);
+
+		// for (let j = 0; j < this.bd.length; j++) {
+		// 	vars = bdd.and(vars, this.bd[j].varbdd(db, s));
+		// 	if (bdds.F === vars) return bdds.F;
+		// }
+		// for (let n = this.eqs.length; n; ) {
+		// 	vars = bdd.and(vars, this.eqs[--n]);
+		// 	if (bdds.F === vars) return bdds.F;
+		// }
+		// vars = bdd.and(vars, this.hsym);
+		// if (!this.proof2.length) p[p.length] = vars;
+		// return bdd.deltail(vars, bits * ar);
 	}
 
 	get_varbdd(bits, ar) {
+		const bdd = this.context.bdd;
 		let x = bdds.T;
 		let y = bdds.F;
 		for (let i = 0; i != this.p.length; ++i) {
 			y = bdd.or(y, this.p[i]);
 		}
 		for (let n = this.vars_arity; n != ar; ++n) {
-			x = from_int_and(pad, bits, n * bits, x);
+			x = from_int_and(this.context.pad, bits, n * bits, x);
 		}
 		return bdd.and(x, y);
 	}

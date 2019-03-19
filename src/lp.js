@@ -17,12 +17,14 @@
 //## include "__common.h"
 
 const { bdds } = require('./bdds');
+const { rule } = require('./rule');
 const { err_goal_arity, err_goal_sym } = require('./messages');
 
 const bdd = new bdds();
 const pad = 0;
 
 function fact(v, bits) {
+	ID_TRC('fact');
 	let r = bdds.T;
 	const m = {};
 	for (let j = 0; j != v.length; ++j) {
@@ -46,9 +48,11 @@ function align(x, par, pbits, ar, bits) {
 
 // [pfp] logic program
 class lp {
-	constructor(r, g, pg, prev) {
+	constructor(r, g, pg, prev, context) {
 		ID('lp');
 		DBG(this.__id = id);
+		context.bdd = bdd;
+		this.context = context;
 		this.bdd = bdd; // keep reference to the "global" bdd
 		this.pad = pad;
 		this.db = bdds.F; // db root
@@ -97,11 +101,12 @@ class lp {
 				this.db = bdd.or(this.db, fact(r[i][0], this.bits));
 			} else {
 				DBG(__rule('rule_add rule'));
-				const rule = new rule(x, this.bits, this.dsz, this.pgoals, this.nul, this.pad);
-				this.rules.push(rule);
+				this.rules[this.rules.length] =
+					new rule(r[i], this.bits, this.dsz,
+						this.pgoals.length > 0, context);
 			}
 		}
-		if (pgoals.length) {
+		if (this.pgoals.length) {
 			this.proof1 = new lp(this.get_proof1(), [], [], this);
 			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1);
 		}
@@ -130,9 +135,9 @@ class lp {
 		}
 	}
 
-	getbdd(t) { return this.from_bits(t); }
-
 	getdb() { return this.getbdd(this.db); }
+	getbdd(t) { return this.from_bits(t, this.bits, this.ar); }
+	getbdd_one(t) { return [ this.one_from_bits(t, this.bits, this.ar) ]; }
 
 	term_pad(t) {
 		const l = t.length;
@@ -142,15 +147,17 @@ class lp {
 	}
 
 	rule_pad(t) {
+		ID_TRC('rule_pad');
 		const r = t.slice();
 		for (let i = 0; i != r.length; ++i) {
 			r[i] = r[i].slice();
-			this.term_pad(r[i], ar);
+			this.term_pad(r[i], this.ar);
 		}
 		return r;
 	}
 
 	rules_pad(t) {
+		ID_TRC('rules_pad');
 		const r = t.splice(0, t.length);
 		for (let i = 0; i != r.length; ++i) {
 			t[t.length] = this.rule_pad(r[i]);
@@ -159,6 +166,7 @@ class lp {
 	}
 
 	fwd(add, del) {
+		ID_TRC('lp.fwd');
 		DBG(__pfp(`lp.fwd(add: ${add.add}, del: ${del.del})`))
 		this.cache.pos = {}; this.cache.neg = {};
 		for (let i = 0; i < this.rules.length; i++) {
@@ -169,8 +177,8 @@ class lp {
 			DBG(__pfp(`lp.fwd...i:${i} t:${t}`));
 			if (r.neg) { del.del = t; } else { add.add = t; }
 		}
-		DBG(this.drv.printbdd("add:\n", this, add));
-		DBG(this.drv.printbdd("del:\n", this, del));
+		//DBG(this.drv.printbdd("add:\n", this, add.add));
+		//DBG(this.drv.printbdd("del:\n", this, del.del));
 	}
 
 	pfp() {
@@ -192,25 +200,25 @@ class lp {
 			add.add = bdds.F;
 			del.del = bdds.F;
 			d = this.db;       // get current db root
-			s.push(d);           // store current db root into steps
+			s[s.length] = d;           // store current db root into steps
 			DBG(__pfp(`____________________STEP_${++step}________________________`))
 			DBG(__pfp(`                                                     `))
 			this.fwd(add, del);         // do pfp step
 			DBG(__pfp(`___________________/STEP_${step}________________________`))
 			t = bdd.and_not(add.add, del.del);
-			DBG(__pfp('db:', p.db, 'add:', add.add, 'del:', del.del, 't:', t))
+			DBG(__pfp('db:', this.db, 'add:', add.add, 'del:', del.del, 't:', t))
 			if (t === bdds.F && add.add !== bdds.F) {
 				DBG(__pfp('db set (contradiction):', this.db));
 				return false;
 			} else {
-				this.db = bdd.or(p.bdd.and_not(this.db, del.del), t);
+				this.db = bdd.or(bdd.and_not(this.db, del.del), t);
 				DBG(__pfp('db set:', this.db));
 			}
 			// if db root already resulted from any previous step
 			if (d === this.db) break;
 			if (s.includes(this.db)) return false; // unsat
 		};
-		DBG(this.drv.printdb("after: ", this));
+		//DBG(this.drv.printdb("after: ", this));
 		if (this.proof1) {
 			this.db = this.prove();
 			this.ar = this.proof2.ar;
@@ -247,18 +255,18 @@ class lp {
 		return bdd.from_int(sym, this.bits, this.bits * pos);
 	}
 
-	from_bits(x) {
-		const s = bdd.allsat(x, this.bits * this.ar);
+	from_bits(x, bits, ar) {
+		const s = bdd.allsat(x, bits * ar, bits);
 		const r = Array(s.length);
 		for (let k = 0; k < r.length; k++) {
-			r[k] = Array(this.ar).fill(0);
+			r[k] = Array(ar).fill(0);
 		}
 		let n = s.length;
 		while (n--) {
-			for (let i = 0; i != this.ar; ++i) {
-				for (let b = 0; b != this.bits; ++b) {
-					if (s[n][i * this.bits + b] > 0) {
-						r[n][i] |= 1 << (this.bits - b - 1);
+			for (let i = 0; i != ar; ++i) {
+				for (let b = 0; b != bits; ++b) {
+					if (s[n][i * bits + b] > 0) {
+						r[n][i] |= 1 << (bits - b - 1);
 					}
 				}
 				// if (r[n][i] === pad) break;

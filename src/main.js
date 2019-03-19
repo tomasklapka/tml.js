@@ -38,7 +38,8 @@ async function main() {
 	//// input for IDE debugging (avoids configuration of stdin)
 	// s = "e 1 2. e 2 3. e 3 1. e ?x ?y :- e ?x ?z, e ?z ?y.";
 	// s = "father Tom Amy. parent ?X ?Y :- father ?X ?Y.";
-	s = "v1 v2. ?x ?y :- ?y ?x.";
+	// s = "v1 v2. ?x ?y :- ?y ?x.";
+	// s = "test two.";
 	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
 	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
 	// unless s, read source from stdin
@@ -46,7 +47,7 @@ async function main() {
 		try {
 			process.stdin.setEncoding('utf8');
 			s = await load_stream(process.stdin);
-		} catch (err) {   // stdin read error
+		} catch (err) { // stdin read error
 			console.log('Read error:', err);
 			return 4;
 		}

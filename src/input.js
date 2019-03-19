@@ -19,7 +19,8 @@
 const {
 	unmatched_quotes, err_fname, err_quote, err_chr, err_directive_arg,
 	dot_expected, err_int, err_term_or_dot, err_parse, err_close_curly,
-	err_escape
+	err_escape, err_paren, err_rule_dir_prod_expected, err_body
+	// err_prod
 } = require('./messages');
 
 const isspace = c => /\s/.test(c);
@@ -77,10 +78,11 @@ function lex(s) {
 	}
 	if (s.s[0] === ':') {
 		skip(s);
-		if (s.s[0] == '-') { return ret(':-', 1); }
+		if (s.s[0] === '-'
+		|| s.s[0] === '=') { return ret(':-', 1); }
 		else throw new Error(err_chr);
 	}
-	if ("!~.,{}@".indexOf(s.s[0]) !== -1) { return ret(s.s[0], 1); }
+	if ("!~.,(){}@".indexOf(s.s[0]) !== -1) { return ret(s.s[0], 1); }
 	if ("?-".indexOf(s.s[0]) !== -1) skip(s);
 	while (isalnum(s.s[0])) skip(s);
 	return ret(t);
@@ -91,7 +93,7 @@ function prog_lex(cws) {
 	const r = [];
 	do {
 		let l = lex(s);
-		if (l !== null) r.push(l);
+		if (l !== null) r[r.length] = l;
 	} while (s.s.length);
 	return r;
 }
@@ -129,7 +131,7 @@ function get_int(from) {
 	return neg ? -r : r;
 }
 
-const etype = Object.freeze({ SYM: 0, NUM: 1, CHR: 2, VAR: 3 });
+const etype = Object.freeze({ SYM: 0, NUM: 1, CHR: 2, VAR: 3, OPENP: 4, CLOSEP: 5 });
 class elem {
 	constructor() {
 		this.num = 0; // number
@@ -139,6 +141,16 @@ class elem {
 		ID_TRC('elem.parse');
 		DBG(__parser(`elem.parse(${l[pos.pos]})`));
 		const p = pos.pos; const c = l[p][0];
+		if (c === "(") {
+			this.e = l[pos.pos++];
+			this.type = etype.OPENP;
+			return true;
+		}
+		if (c === ")") {
+			this.e = l[pos.pos++];
+			this.type = etype.CLOSEP;
+			return true;
+		}
 		if (!isalnum(c) &&
 			"'-?".indexOf(c) === -1) return false;
 		this.e = l[p];
@@ -162,6 +174,8 @@ elem.SYM = etype.SYM;
 elem.NUM = etype.NUM;
 elem.CHR = etype.CHR;
 elem.VAR = etype.VAR;
+elem.OPENP = etype.OPENP;
+elem.CLOSEP = etype.CLOSEP;
 
 class raw_term {
 	constructor() {
@@ -171,38 +185,46 @@ class raw_term {
 	parse(l, pos) {
 		ID_TRC('raw_term.parse');
 		DBG(__parser(`raw_term.parse(${l[pos.pos]})`));
-		this.neg = l[pos.pos] === '~';
+		this.neg = l[pos.pos][0] === '~';
 		if (this.neg) ++pos.pos;
 		while ('.:,'.indexOf(l[pos.pos][0]) === -1) {
 			const m = new elem()
 			if (!m.parse(l, pos)) return false;
-			this.e.push(m);
+			this.e[this.e.length] = m;
 		};
+		let dep = 0;
+		for (let i = 0; i != this.e.length; ++i) {
+			if (this.e[i].type === elem.OPENP) ++dep;
+			else if (this.e[i].type === elem.CLOSEP && !--dep)
+				throw new Error(err_paren);
+		}
+		if (dep) throw new Error(err_paren);
 		return true;
 	}
 }
 
 class raw_rule {
 	constructor() {
-		this.h = new raw_term(); // head = raw_term
-		this.b = []; // body = arr of raw_term
+		this.b = [];
 	}
 	parse(l, pos) {
 		ID_TRC('raw_rule.parse');
 		DBG(__parser(`raw_rule.parse(${l[pos.pos]})`));
-		this.goal = l[pos.pos];
-		if (this.goal === '!') {
-			this.pgoal = l[++pos.pos];
-			if (this.pgoal === '!') {
-				++pos.pos;
-			}
+		const curr = pos.pos;
+		this.goal = l[pos.pos] === '!';
+		if (this.goal) {
+			this.pgoal = l[++pos.pos][0] === '!';
+			if (this.pgoal) { ++pos.pos; }
 		}
-		if (!this.h.parse(l, pos)) return false;
-		if (l[pos.pos] === '.') { ++pos.pos; return true; }
-		if (l[pos.pos++] !== ':-') throw new Error(err_chr);
+		this.b[0] = new raw_term();
+		if (!this.b[0].parse(l, pos)) { pos.pos = curr; return false; }
+		if (l[pos.pos][0] === '.') { ++pos.pos; return true; }
+		if (l[pos.pos][0] !== ':'
+		||  l[pos.pos][1] !== '-') { pos.pos = curr; return false; }
+		++pos.pos;
 		let t = new raw_term();
 		while (t.parse(l, pos)) {
-			this.b.push(t);
+			this.b[this.b.length] = t;
 			if (l[pos.pos][0] === '.') { ++pos.pos; return true; }
 			if (l[pos.pos][0] !== ',') throw new Error(err_term_or_dot);
 			++pos.pos;
@@ -212,9 +234,34 @@ class raw_rule {
 	}
 }
 
+class production {
+	constructor() {
+		this.p = [];
+	}
+	parse(l, pos) {
+		const curr = pos.pos;
+		const e = new elem();
+		e.parse(l, pos);
+		if (l[pos.pos][0] !== ':' || l[pos.pos][1] !== '=') {
+			pos = curr;
+			return false;
+		}
+		++pos.pos;
+		this.p[this.p.length] = e;
+		for (;;) {
+			if (l[pos.pos][0] === '.') { ++pos.pos; return true; }
+			const e = new elem();
+			if (!e.parse(l, pos)) return false;
+			this.p[this.p.length] = e;
+		}
+		// throw new Error(err_prod); unreachable
+	}
+}
+
 class raw_prog {
 	constructor() {
 		this.d = []; // arr of directive
+		this.g = []; // arr of production
 		this.r = []; // arr of raw_rule
 	}
 	parse(l, pos) {
@@ -222,10 +269,16 @@ class raw_prog {
 		DBG(__parser(`raw_prog.parse(${l[pos.pos]})`));
 		while (pos.pos < l.length && l[pos.pos] !== '}') {
 			const d = new directive();
-			const r = new raw_rule();
 			if (d.parse(l, pos)) this.d[this.d.length] = d;
-			else if (r.parse(l, pos)) this.r[this.r.length] = r;
-			else return false;
+			else {
+				const r = new raw_rule();
+				if (r.parse(l, pos)) this.r[this.r.length] = r;
+				else {
+					const p = new production();
+					if (p.parse(l, pos)) this.g[this.g.length] = p;
+					else return false;
+				}
+			}
 		}
 		return true;
 	}
@@ -239,14 +292,14 @@ class raw_progs {
 		const l = prog_lex(s);
 		if (l[0] !== '{') {
 			const x = new raw_prog();
-			if (!x.parse(l, pos)) throw new Error(err_parse);
-			this.p.push(x);
+			if (!x.parse(l, pos)) throw new Error(err_rule_dir_prod_expected);
+			this.p[this.p.length] = x;
 		} else {
 			do {
 				const x = new raw_prog();
 				++pos.pos;
 				if (!x.parse(l, pos)) throw new Error(err_parse);
-				this.p.push(x);
+				this.p[this.p.length] = x;
 				if (l[pos.pos++] !== '}') throw new Error(err_close_curly);
 			} while (pos.pos < l.length);
 		}

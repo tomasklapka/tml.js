@@ -104,11 +104,13 @@ class bdds {
 		return r;
 	}
 
-	from_range(max, bits, offset, r) {
+	from_range(max, bits, offset, ex, r) {
 		ID_TRC('from_range');
 		let x = bdds.F;
-		for (let n = 1; n != max; ++n) {
-			x = this.or(x, this.from_int(n, bits, offset));
+		for (let n = 0; n != max; ++n) {
+			if (!ex.includes(n)) {
+				x = this.or(x, this.from_int(n, bits, offset));
+			}
 		}
 		return this.and(r, x);
 	}
@@ -139,7 +141,7 @@ class bdds {
 		ID_TRC('add_nocheck');
 		const r = this.V.length;
 		this.M[n.key] = r;
-		this.V.push(n);
+		this.V[this.V.length] = n;
 		return r;
 	}
 
@@ -160,29 +162,31 @@ class bdds {
 		return r;
 	}
 
-	sat(v, nvars, n, p, r) {
+	sat(v, nvars, n, p, r, mod) {
 		ID_TRC('sat');
 		if (nleaf(n) && !ntrueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
-			this.sat(v+1, nvars, n, p, r);
+			this.sat(v+1, nvars, n, p, r, mod);
 			p[v-1] = false;
-			this.sat(v+1, nvars, n, p, r);
+			this.sat(v+1, nvars, n, p, r, mod);
 		} else {
 			if (v !== nvars+1) {
 				p[v-1] = true;
-				this.sat(v+1, nvars, getnode(n.hi), p, r);
+				this.sat(v+1, nvars, getnode(n.hi), p, r, mod);
 				p[v-1] = false;
-				this.sat(v+1, nvars, getnode(n.lo), p, r);
+				this.sat(v+1, nvars, getnode(n.lo), p, r, mod);
 			}	else {
-				r.push(p.slice());
+				r[r.length] = p.slice();
 			}
 		}
 	}
 
-	allsat(x, nvars) {
+	allsat(x, nvars, mod) {
+		ID_TRC('allsat');
+		DBG(__bdd(`allsat-${id} (x: ${x}, nvars: ${nvars})`, x));
 		const p = Array(nvars).fill(false); const r = [];
-		this.sat(1, nvars, getnode(x), p, r)
+		this.sat(1, nvars, getnode(x), p, r, mod);
 		return r;
 	}
 
@@ -438,27 +442,28 @@ class bdds {
 		apply_ret(r, this.memo_and_deltail);
 	}
 
-	and_many(v) {
+	and_many(v, from = null, to = null) {
 		ID('and_many');
-		TRC(`and_many-${id} (v:${v.join(',')})`);
-		let from = 0;
-		if (1 === (v.length - from)) {
-			return v[from];
-		}
+		TRC(`and_many-${id} (v:${v.join(',')}, from: ${from}, to: ${to})`);
+		from = from || 0;
+		to = to || v.length;
+		if (1 === (to - from)) return v[from];
+		if (2 === (to - from)) return this.and(v[from], v[from+1]);
 		while (leaf(v[from])) {
 			if (!trueleaf(v[from])) {
 				return bdds.F;
 			} else {
-				if (1 === (v.length - ++from)) {
+				if (1 === (to - ++from)) {
 					return v[from];
 				}
 			}
 		}
 		let t = v[from];
+		const sz = v.length;
 		let m = getnode(t).v;
 		let b = false;
 		let eq = true;
-		for (let i = from + 1; i != v.length; ++i) {
+		for (let i = from + 1; i != to; ++i) {
 			if (leaf(v[i])) {
 				if (!trueleaf(v[i])) return bdds.F;
 				continue;
@@ -469,24 +474,24 @@ class bdds {
 			if (n.v < m) m = n.v;
 		}
 		if (eq) return t;
-		const v1 = Array(v.length - from);
-		const v2 = Array(v.length - from);
-		for (let i = from; i != v.length; ++i) {
+		for (let i = from; i != to; ++i) {
 			if (!b || getnode(v[i]).v === m) {
-				v1.push(leaf(v[i]) ? v[i] : getnode(v[i]).hi);
+				v[v.length] = leaf(v[i]) ? v[i] : getnode(v[i]).hi;
 			} else {
-				v1.push(v[i]);
+				v[v.length] = v[i];
 			}
 		}
-		for (let i = from; i != v.length; ++i) {
+		const t1 = v.length;
+		for (let i = from; i != to; ++i) {
 			if (!b || getnode(v[i]).v === m) {
-				v2.push(leaf(v[i]) ? v[i] : getnode(v[i]).lo);
+				v[v.length] = leaf(v[i]) ? v[i] : getnode(v[i]).lo;
 			} else {
-				v2.push(v[i]);
+				v[v.length] = v[i];
 			}
 		}
-		const hi = this.and_many(v1);
-		const lo = this.and_many(v2);
+		const t2 = v.length;
+		const hi = this.and_many(v, sz, t1);
+		const lo = this.and_many(v, t1, t2);
 		return this.add(new node(m, hi, lo));
 	}
 	// if-then-else operator

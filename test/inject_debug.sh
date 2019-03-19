@@ -14,8 +14,9 @@ declare -a bdd=(
 	bdd.cpp
 	#bdd_add
 	bdd_add_nocheck
-	#bdd_or bdd_ex bdd_and bdd_and_not bdd_deltail
-	#bdd_and_deltail bdd_and_many bdd_ite bdd_permute sat allsat from_int
+	bdd_or bdd_ex bdd_and bdd_and_not bdd_deltail
+	bdd_and_deltail bdd_and_many bdd_ite bdd_permute
+	sat allsat from_int
 )
 declare -a lp=(
 	lp.cpp

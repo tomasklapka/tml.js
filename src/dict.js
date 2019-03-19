@@ -40,12 +40,12 @@ class dict {
 			return get(`%${this.last}`);
 		}
 		if (typeof(s) === 'number') {     // if s is number
-			if (s > this.nums) return this.syms[t - this.nums];
-			if (t < 256) {
-				this.str_chr = String.fromCharCode(--t);
+			if (s > this.nums) return this.syms[s - this.nums];
+			if (s < 256) {
+				this.str_chr = String.fromCharCode(--s);
 				return this.str_chr;
 			}
-			this.str_nums = `${t - 256}`;
+			this.str_nums = `${s - 256}`;
 			return this.str_nums;
 			// if (s < this.syms.length) {
 			// 	const r = s < 0 ? this.vars[-s] : this.syms[s];
@@ -64,7 +64,7 @@ class dict {
 				DBG(__dict(`get(${s}) variable = -${p}`));
 				return -p;        //        return its index negated
 			}
-			this.vars.push(s);        //     else store the variable in dict
+			this.vars[this.vars.length] = s; //     else store the variable in dict
 			DBG(__dict(`get(${s}) variable = -${this.vars.length-1} (created)`))
 			return -(this.vars.length-1); //     and return its index negated
 		}
@@ -73,7 +73,7 @@ class dict {
 			DBG(__dict(`get(${s}) symbol = ${p}`))
 			return p;                 //         return its index
 		}
-		this.syms.push(s);                //     else store the symbol in dict
+		this.syms[this.syms.length] = s; //     else store the symbol in dict
 		DBG(__dict(`get(${s}) symbol = ${this.syms.length-1} (created)`))
 		return this.syms.length-1;        //         and return its index
 	}
