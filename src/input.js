@@ -184,7 +184,7 @@ class raw_term {
 	}
 	parse(l, pos) {
 		ID_TRC('raw_term.parse');
-		DBG(__parser(`raw_term.parse(${l[pos.pos]})`));
+		DBG(__parser(`raw_term.parse(${l[pos.pos]}, ${pos.pos})`));
 		this.neg = l[pos.pos][0] === '~';
 		if (this.neg) ++pos.pos;
 		while ('.:,'.indexOf(l[pos.pos][0]) === -1) {
@@ -228,7 +228,7 @@ class raw_rule {
 			if (l[pos.pos][0] === '.') { ++pos.pos; return true; }
 			if (l[pos.pos][0] !== ',') throw new Error(err_term_or_dot);
 			++pos.pos;
-			t.e = [];
+			t = new raw_term();
 		}
 		throw new Error(err_body);
 	}

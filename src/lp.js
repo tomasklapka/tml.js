@@ -91,9 +91,9 @@ class lp {
 				if (t[k] > 0 && t[k] >= this.dsz) throw new Error(err_goal_sym);
 			}
 		}
-		this.rules_pad(r);
-		this.rules_pad(g);
-		this.rules_pad(pg);
+		r = this.rules_pad(r);
+		g = this.rules_pad(g);
+		pg = this.rules_pad(pg);
 		this.bits = msb(this.dsz);
 		for (let i = 0; i != r.length; ++i) {
 			if (r[i].length === 1) {
@@ -144,25 +144,25 @@ class lp {
 		if (l < this.ar + 1) {
 			t = t.concat(Array(this.ar + 1 - l).fill(pad));
 		}
+		return t;
 	}
 
 	rule_pad(t) {
 		ID_TRC('rule_pad');
-		const r = t.slice();
-		for (let i = 0; i != r.length; ++i) {
-			r[i] = r[i].slice();
-			this.term_pad(r[i], this.ar);
+		const r = [];
+		for (let i = 0; i != t.length; ++i) {
+			r[i] = this.term_pad(JSON.parse(JSON.stringify(t[i])), this.ar);
 		}
 		return r;
 	}
 
 	rules_pad(t) {
 		ID_TRC('rules_pad');
-		const r = t.splice(0, t.length);
-		for (let i = 0; i != r.length; ++i) {
-			t[t.length] = this.rule_pad(r[i]);
-
+		const r = [];
+		for (let i = 0; i != t.length; ++i) {
+			r[r.length] = this.rule_pad(t[i]);
 		}
+		return r;
 	}
 
 	fwd(add, del) {
