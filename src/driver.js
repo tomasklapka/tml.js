@@ -28,7 +28,7 @@ class driver {
 	constructor(rp) {
 		ID_TRC('driver');
 		// initialize symbols and variables tables
-		this.d = new dict();
+		this.d = new dict(this);
 		this.strs_extra = [];
 		this.builtin_rels = [];
 		this.builtin_symbdds = [];
@@ -44,9 +44,9 @@ class driver {
 		}
 		for (let n = 0; n != rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
-			this.openp = this.d.get("(");
-			this.closep = this.d.get(")");
-			this.nul = this.d.get("null");
+			this.openp = this.d.get_by_str("(");
+			this.closep = this.d.get_by_str(")");
+			this.nul = this.d.get_by_str("null");
 			this.prog_init(rp.p[n], this.directives_load(rp.p[n]));
 		}
 	}
@@ -57,7 +57,7 @@ class driver {
 
 	from_func(fn, name, from, to, r) {
 		ID_TRC('from_func');
-		const rel = this.d.get(name);
+		const rel = this.d.get_by_str(name);
 		this.builtin_rels[this.builtin_rels.length] = rel;
 		for (; from !== to; ++from) {
 			if (fn(from)) r[r.length] = [ [ 2, rel, from ] ];
@@ -71,7 +71,6 @@ class driver {
 		this.from_func(isalnum, 'alnum', 0, 255, m);
 		this.from_func(isalpha, 'alpha', 0, 255, m);
 		this.from_func(isdigit, 'digit', 0, 255, m);
-		console.log(m);
 		return m;
 	}
 
@@ -92,6 +91,7 @@ class driver {
 				}
 			}
 		}
+ 		DBG(__cout(`get_nums-${id} = ${nums}`));
 		return nums;
 	}
 
@@ -101,7 +101,7 @@ class driver {
 		for (let k = 0; k != p.d.length; ++k) {
 			const d = p.d[k];
 			const str = d.arg.slice(1, d.arg.length-1);
-			r[this.d.get(d.rel)] = d.fname
+			r[this.d.get_by_lex(d.rel)] = d.fname
 				? file_read_text(str.replace('\\', ''))
 				: str;
 		}
@@ -110,15 +110,19 @@ class driver {
 
 	get_term(r) {
 		ID_TRC('get_term');
+		DBG(__driver(`get_term(r)`, r));
 		const t = [];
 		t[t.length] = r.neg ? -1 : 1;
 		for (let i = 0; i != r.e.length; ++i) {
 			const e = r.e[i];
+			console.log(e);
+			console.log('elem.NUM', e.type === elem.NUM);
+			console.log('elem.SYM', e.type === elem.SYM);
 			if (e.type === elem.NUM) t[t.length] = e.num + 256;
 			else if (e.type === elem.CHR) t[t.length] = e.e[0];
 			else if (e.type === elem.OPENP) t[t.length] = this.openp;
 			else if (e.type === elem.CLOSEP) t[t.length] = this.closep;
-			else t[t.length] = this.d.get(e.e);
+			else t[t.length] = this.d.get_by_lex(e.e);
 		}
 		return t;
 	}
@@ -142,9 +146,9 @@ class driver {
 			if (p.p.length < 2) throw new Error("empty production.\n");
 			const t = [];
 			let v = -1;
-			let x = this.d_get(p.p[0].e);
+			let x = this.d.get_by_lex(p.p[0].e);
 			if (p.p.length === 2 && p.p[1].type === elem.SYM
-			&& nul === this.d.get(p.p[1].e)) {
+			&& nul === this.d.get_by_lex(p.p[1].e)) {
 				m[m.length] = [ [ 1, x, -1, -1 ], [ 1, rel, -2, -1, -3 ] ];
 				m[m.length] = [ [ 1, x, -1, -1 ], [ 1, rel, -2, -3, -1 ] ];
 				continue;
@@ -152,7 +156,7 @@ class driver {
 			t[t.length] = [ 1, x, -1, -p.p.length ];
 			for (let n = 1; n < p.p.length; ++n) {
 				if (p.p[n].type === elem.SYM) {
-					x = this.d.get(p.p[n].e);
+					x = this.d.get_by_lex(p.p[n].e);
 					if (nul === x) throw new Error(err_null);
 					t[t.length] = [ 1, x, v, v-1 ];
 				}
@@ -174,10 +178,10 @@ class driver {
 		if (p.g.length && s.length > 1) throw new Error("only one string allowed given grammar.\n");
 		this.grammar_to_rules(p.g, m, Object.keys(s)[0]);
 		if (p.d.length > 0) {
-			process.exit(0);
 			const rtxt = this.get_char_builtins();
 			m = m.concat(rtxt);
 		}
+		DBG(__cout(this.d));
 		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];
 			if (x.goal && !x.pgoal) {
 				if (x.b.length !== 1) throw new Error ('assert x.b.length === 1');
@@ -191,6 +195,8 @@ class driver {
 				}
 			}
 		}
+		// console.log(rp.p[0].r[0].b[0].e);
+		//process.exit(0);
 		const keys = Object.keys(s);
 		for (let i = 0; i != keys.length; ++i) {
 			const x = s[keys[i]];
@@ -219,7 +225,7 @@ class driver {
 		DBG(__bdd(`prog_read bits: ${this.bits}`))
 		return p;
 	}
-	// pfp logic
+
 	pfp(p) {
 		ID_TRC('driver.pfp');
 		if (!this.prog.pfp()) return false;
@@ -239,20 +245,21 @@ class driver {
 		return os;
 	}
 
-	// os - output string, p - program, t - db root
 	printbdd_matrix(os = '', t = null) {
 		ID_TRC('printbdd');
-		DBG(__bdd(`printbdd(t: ${t})`))
+		DBG(__bdd(`printbdd(t: ${t})`, t, this.d));
 		const s = [];
 		for (let i = 0; i < t.length; i++) { const v = t[i];
 			let ss = '';
 			for (let j = 0; j < v.length; j++) { const k = v[j];
 				if (k === pad) ss += '* ';
-				else if (k < this.nsyms) ss += this.d.get(k) + ' ';
+				else if (k < this.nsyms) ss += this.d.get_by_int(k) + ' ';
 				else ss += '[' + k + '] ';
 			}
 			s[s.length] = ss;
+
 		}
+		DBG(__bdd(`printbdd - ${s}`, s));
 		os += s.sort().join(`\n`);
 		return os;
 	}

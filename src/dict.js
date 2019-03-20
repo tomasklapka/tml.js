@@ -21,61 +21,78 @@ const { err_sym_digit } = require('./messages');
 
 // dict represents strings as unique integers
 class dict {
-	constructor() {
+	constructor(driver) {
 		this.syms = [ pad ];
+		this.syms_dict = {};
 		this.vars = [ pad ];
 		this.nums = 0;
 		this.last = 1;
 		this.str_chr = 'a';
 		this.str_nums = null;
+		this.driver = driver;
 	}
 	// nsyms = number of stored symbols
 	get nsyms() { return this.syms.length + this.nums; }
 	// returns bit size of the dictionary
 	get bits() { return msb(this.nsyms); }
-	// gets and remembers the identifier and returns it's unique index
-	// positive indexes are for symbols and negative indexes are for vars
-	get(s = null) {
-		if (s === null) {
-			return get(`%${this.last}`);
+
+	get_by_int(t = null) {
+		DBG(__dict(`get_by_int(${t})`));
+		if (t > this.nums) return this.syms[t - this.nums];
+		if (t < 256) {
+			this.str_chr = String.fromCharCode(--t);
+			return this.str_chr;
 		}
-		if (typeof(s) === 'number') {     // if s is number
-			if (s > this.nums) return this.syms[s - this.nums];
-			if (s < 256) {
-				this.str_chr = String.fromCharCode(--s);
-				return this.str_chr;
-			}
-			this.str_nums = `${s - 256}`;
-			return this.str_nums;
-			// if (s < this.syms.length) {
-			// 	const r = s < 0 ? this.vars[-s] : this.syms[s];
-			// 	DBG(__dict(`get(${s}) by id = ${r}`))
-			// 	return r;
-			// }
-			// const r = s - this.syms.length;
-			// DBG(__dict(`get(${s}) number = ${r}`))
-			//return r;                 //     return symbol by index
-		}
-		if (!s || !s.length) return pad;
+		this.str_nums = `${t - 256}`;
+		return this.str_nums;
+		// if (s < this.syms.length) {
+		// 	const r = s < 0 ? this.vars[-s] : this.syms[s];
+		// 	DBG(__dict(`get(${s}) by id = ${r}`))
+		// 	return r;
+		// }
+		// const r = s - this.syms.length;
+		// DBG(__dict(`get(${s}) number = ${r}`))
+		//return r;                 //     return symbol by index
+	}
+
+	get_by_lex(s) {
+		DBG(__dict(`get_by_lex(${s})`));
+		if (!s || s.length === 0) return pad;
 		if (/\d/.test(s[0])) throw new Error(err_sym_digit);
-		if (s[0] === '?') {               // if s is variable
+		if (s[0] === '?') {
 			const p = this.vars.indexOf(s);
-			if (p >= 0) {             //     if variable already in dict
-				DBG(__dict(`get(${s}) variable = -${p}`));
-				return -p;        //        return its index negated
+			if (p >= 0) {
+				DBG(__dict(`get_by_lex(${s}) variable = -${p}`));
+				return -p;
 			}
-			this.vars[this.vars.length] = s; //     else store the variable in dict
-			DBG(__dict(`get(${s}) variable = -${this.vars.length-1} (created)`))
-			return -(this.vars.length-1); //     and return its index negated
+			this.vars[this.vars.length] = s;
+			DBG(__dict(`get_by_lex(${s}) variable = -${this.vars.length-1} (created)`))
+			return -(this.vars.length-1);
 		}
-		const p = this.syms.indexOf(s);   // if s is symbol
-		if (p >= 0) {                     //     if is symbol in dict
-			DBG(__dict(`get(${s}) symbol = ${p}`))
-			return p;                 //         return its index
+		if (this.syms_dict.hasOwnProperty(s)) {
+			DBG(__dict(`get_by_lex(${s}) symbol = ${this.syms_dict[s]}`))
+			return this.syms_dict[s];
 		}
-		this.syms[this.syms.length] = s; //     else store the symbol in dict
-		DBG(__dict(`get(${s}) symbol = ${this.syms.length-1} (created)`))
-		return this.syms.length-1;        //         and return its index
+		this.syms[this.syms.length] = s;
+		this.syms_dict[s] = this.syms.length + this.nums - 1;
+		DBG(__dict(`get_by_lex(${s}) symbol = ${this.syms_dict[s]} (created)`))
+		return this.syms_dict[s];
+	}
+
+	get_by_str(s = null) {
+		DBG(__dict(`get_by_str(${s})`));
+		if (s === null) {
+			return this.get_by_str(`%${this.last}`);
+		}
+		if (this.syms_dict.hasOwnProperty(s)) {
+			return this.syms_dict[s];
+		}
+		if (!this.driver.strs_extra.includes(s)) {
+			this.driver.strs_extra[this.driver.strs_extra] = s;
+		}
+		this.syms[this.syms.length] = s;
+		this.syms_dict[s] = this.syms.length + this.nums - 1;
+		return this.syms_dict[s];
 	}
 
 }
