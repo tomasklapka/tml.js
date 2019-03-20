@@ -27,8 +27,6 @@ class dict {
 		this.vars = [ pad ];
 		this.nums = 0;
 		this.last = 1;
-		this.str_chr = 'a';
-		this.str_nums = null;
 		this.driver = driver;
 	}
 	// nsyms = number of stored symbols
@@ -39,20 +37,8 @@ class dict {
 	get_by_int(t = null) {
 		DBG(__dict(`get_by_int(${t})`));
 		if (t > this.nums) return this.syms[t - this.nums];
-		if (t < 256) {
-			this.str_chr = String.fromCharCode(--t);
-			return this.str_chr;
-		}
-		this.str_nums = `${t - 256}`;
-		return this.str_nums;
-		// if (s < this.syms.length) {
-		// 	const r = s < 0 ? this.vars[-s] : this.syms[s];
-		// 	DBG(__dict(`get(${s}) by id = ${r}`))
-		// 	return r;
-		// }
-		// const r = s - this.syms.length;
-		// DBG(__dict(`get(${s}) number = ${r}`))
-		//return r;                 //     return symbol by index
+		if (t < 256) return `'${String.fromCharCode(--t)}'`;
+		return `${t - 256}`;
 	}
 
 	get_by_lex(s) {
