@@ -99,11 +99,13 @@ class lp {
 			if (r[i].length === 1) {
 				DBG(__rule('rule_add fact'));
 				this.db = bdd.or(this.db, fact(r[i][0], this.bits));
+				DBG(__rule('/rule_add fact added db:', this.db));
 			} else {
 				DBG(__rule('rule_add rule'));
 				this.rules[this.rules.length] =
 					new rule(r[i], this.bits, this.dsz,
 						this.pgoals.length > 0, context);
+				DBG(__rule('/rule_add rule:', this.rules[this.rules.length-1]));
 			}
 		}
 		if (this.pgoals.length) {
@@ -140,6 +142,7 @@ class lp {
 	getbdd_one(t) { return [ this.one_from_bits(t, this.bits, this.ar) ]; }
 
 	term_pad(t) {
+		ID_TRC('term_pad');
 		const l = t.length;
 		if (l < this.ar + 1) {
 			t = t.concat(Array(this.ar + 1 - l).fill(pad));
@@ -158,6 +161,7 @@ class lp {
 
 	rules_pad(t) {
 		ID_TRC('rules_pad');
+		DBG(__pfp(`t `, t));
 		const r = [];
 		for (let i = 0; i != t.length; ++i) {
 			r[r.length] = this.rule_pad(t[i]);

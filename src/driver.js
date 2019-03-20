@@ -42,12 +42,15 @@ class driver {
 				return
 			}
 		}
+		DBG(__cout(rp.p[0]));
+		DBG(__cout(rp.p[0].r[0].b[0].e));
 		for (let n = 0; n != rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
 			this.openp = this.d.get_by_str("(");
 			this.closep = this.d.get_by_str(")");
 			this.nul = this.d.get_by_str("null");
-			this.prog_init(rp.p[n], this.directives_load(rp.p[n]));
+			const ds = this.directives_load(rp.p[n]);
+			this.prog_init(rp.p[n], ds);
 		}
 	}
 	// nsyms = number of stored symbols
@@ -60,7 +63,9 @@ class driver {
 		const rel = this.d.get_by_str(name);
 		this.builtin_rels[this.builtin_rels.length] = rel;
 		for (; from !== to; ++from) {
-			if (fn(from)) r[r.length] = [ [ 2, rel, from ] ];
+			if (fn(String.fromCharCode(from))) {
+				r[r.length] = [ [ 1, rel, from ] ];
+			}
 		}
 	}
 
@@ -79,9 +84,10 @@ class driver {
 		let nums = 0;
 		for (let i = 0; i != p.d.length; ++i) {
 			const d = p.d[i];
-			const add = d.fname
-				? d.arg.length
+			const add = !d.fname
+				? (d.arg.length-1)
 				: fsize(d.arg.slice(1, d.arg.length-1));
+			DBG(__driver(`add:`, add, 'nums:', nums, '256+add:', 256+add, 'd', d));
 			nums = Math.max(nums, 256 + add);
 		}
 		for (let i = 0; i != p.r.length; ++i) { const r = p.r[i];
@@ -91,7 +97,7 @@ class driver {
 				}
 			}
 		}
- 		DBG(__cout(`get_nums-${id} = ${nums}`));
+		DBG(__dict(`get_nums-${id} = ${nums}`));
 		return nums;
 	}
 
@@ -115,11 +121,8 @@ class driver {
 		t[t.length] = r.neg ? -1 : 1;
 		for (let i = 0; i != r.e.length; ++i) {
 			const e = r.e[i];
-			console.log(e);
-			console.log('elem.NUM', e.type === elem.NUM);
-			console.log('elem.SYM', e.type === elem.SYM);
 			if (e.type === elem.NUM) t[t.length] = e.num + 256;
-			else if (e.type === elem.CHR) t[t.length] = e.e[0];
+			else if (e.type === elem.CHR) t[t.length] = e.e[0].charCodeAt(1);
 			else if (e.type === elem.OPENP) t[t.length] = this.openp;
 			else if (e.type === elem.CLOSEP) t[t.length] = this.closep;
 			else t[t.length] = this.d.get_by_lex(e.e);
@@ -181,7 +184,7 @@ class driver {
 			const rtxt = this.get_char_builtins();
 			m = m.concat(rtxt);
 		}
-		DBG(__cout(this.d));
+		DBG(__dict(this.d));
 		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];
 			if (x.goal && !x.pgoal) {
 				if (x.b.length !== 1) throw new Error ('assert x.b.length === 1');
@@ -195,16 +198,14 @@ class driver {
 				}
 			}
 		}
-		// console.log(rp.p[0].r[0].b[0].e);
-		//process.exit(0);
 		const keys = Object.keys(s);
 		for (let i = 0; i != keys.length; ++i) {
 			const x = s[keys[i]];
 			for (let n = 0; n != x.length-1; ++n) {
-				m[m.length] = [[ 1, keys[i], x[n]+1, n + 257, n + 258 ]];
+				m[m.length] = [[ 1, keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]];
 			}
 			m[m.length] = [[
-				1, keys[i], x[x.length-1]+1,
+				1, keys[i], x[x.length-1].charCodeAt()+1,
 				x.length+256, this.nul ]];
 		}
 		const context = {
@@ -218,7 +219,7 @@ class driver {
 		if (!s.length) {
 			for (let i = 0; i != this.builtin_rels.length; ++i) {
 				this.builtin_symbdds[this.builtin_symbdds.length] =
-					this.prog.get_sym_bdd(x, 0);
+					this.prog.get_sym_bdd(this.builtin_rels[i], 0);
 			}
 		}
 		DBG(__bdd(`prog_read bdd:`, this.prog.bdd.V.map(n=>`${this.prog.bdd.M[n.key]}=(${n.key})`).join(', ')))
@@ -232,7 +233,7 @@ class driver {
 
 		let db = this.prog.db;
 		for (let i = 0; i != this.builtin_symbdds.length; ++i) {
-			db = bdd.and_not(db, this.builtin_symbdds[i]);
+			db = this.prog.bdd.and_not(db, this.builtin_symbdds[i]);
 		}
 		console.log(this.printbdd_matrix('', this.prog.getbdd(db)));
 		return true;

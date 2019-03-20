@@ -12,6 +12,8 @@
 // modified over time by the Author.
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
+//#define TRACE
+
 #ifdef DEBUG
 #  include "__debug.js"
 #  define ID(x) const id = __counter(x)

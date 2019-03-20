@@ -12,6 +12,7 @@ const __and_deltail = __d('tml:bdd:and_deltail');
 const __and_not     = __d('tml:bdd:and_not');
 const __permute     = __d('tml:bdd:permute');
 const __ite         = __d('tml:bdd:ite');
+const __lexer       = __d('tml:lexer');
 const __parser      = __d('tml:parser');
 const __varbdd      = __d('tml:pfp:varbdd');
 const __rule        = __d('tml:pfp:rule');

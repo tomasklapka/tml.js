@@ -25,7 +25,7 @@ const {
 
 const isspace = c => /\s/.test(c);
 const isdigit = c => /\d/.test(c);
-const isalnum = c => /[\d\w]/.test(c) || /\p{L}/u.test(c);
+const isalnum = c => /[\d\w]/.test(c); // || /\p{L}/u.test(c); // illegal RE char in FF
 const isalpha = c => !isdigit(c) && isalnum(c);
 
 // skip 1 or more characters from parsing input
@@ -38,6 +38,7 @@ const skip_ws = s => {
 };
 
 function lex(s) {
+	ID_TRC('lex');
 	const ret = (t, n = 0) => {
 		if (n > 0) {
 			skip(s, n);
@@ -45,6 +46,7 @@ function lex(s) {
 		}
 		const r = t.substring(0, s.p);
 		s.p = 0;
+		DBG(__lexer(r));
 		return r;
 	}
 	skip_ws(s);
@@ -58,6 +60,7 @@ function lex(s) {
 			else if (s.s[0] === '\\' && "\\\"".indexOf(s.s[1]) !== -1) {
 				throw new Error(err_escape);
 			}
+			skip(s);
 		}
 		skip(s);
 		return ret(t);
@@ -89,12 +92,14 @@ function lex(s) {
 }
 
 function prog_lex(cws) {
+	ID_TRC('prog_lex');
 	const s = { s: cws, p: 0 };
 	const r = [];
 	do {
 		let l = lex(s);
 		if (l !== null) r[r.length] = l;
 	} while (s.s.length);
+	DBG(__lexer('lexemes:', r));
 	return r;
 }
 
@@ -107,13 +112,14 @@ class directive {
 	parse(l, pos) {
 		ID_TRC('directive.parse');
 		DBG(__parser(`directive.parse(${l[pos.pos]})`));
-		if (l[pos.pos] !== '@') return false;
-		rel = l[++pos.pos];
-		if (l[++pos.pos] === '<') this.fname = true;
-		else if (l[pos.pos] === '"') this.fname = false;
+		if (l[pos.pos][0] !== '@') return false;
+		this.rel = l[++pos.pos];
+		DBG(__parser('rel', this.rel, 'cur:', l[pos.pos+1][0]));
+		if (l[++pos.pos][0] === '<') this.fname = true;
+		else if (l[pos.pos][0] === '"') this.fname = false;
 		else throw new Error(err_directive_arg);
-		arg = l[pos.pos++];
-		if (l[pos.pos++] !== '.') throw new Error(dot_expected);
+		this.arg = l[pos.pos++];
+		if (l[pos.pos++][0] !== '.') throw new Error(dot_expected);
 		return true;
 	}
 }
@@ -151,13 +157,11 @@ class elem {
 			this.type = etype.CLOSEP;
 			return true;
 		}
-		if (!isalnum(c) &&
-			"'-?".indexOf(c) === -1) return false;
+		if (!isalnum(c) && "'-?".indexOf(c) === -1) return false;
 		this.e = l[p];
 		if (c === "'") {
-			const ll = c.length;
-			if (ll !== 3 ||
-				l[p][ll-1] !== "'") throw new Error(err_quote);
+			const ll = l[p].length;
+			if (ll !== 3 || l[p][2] !== "'") throw new Error(err_quote);
 			this.type = etype.CHR;
 			this.e = l[p].slice(1, ll-1);
 		} else if (c === '?') this.type = etype.VAR;
@@ -286,6 +290,7 @@ class raw_prog {
 
 class raw_progs {
 	constructor(str) {
+		ID_TRC('new_raw_progs');
 		this.p = []; // arr of raw_prog
 		const s = string_read_text(str);
 		let pos = { pos: 0 };

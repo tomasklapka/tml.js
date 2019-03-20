@@ -15,7 +15,7 @@ MKDIR_P = mkdir -p
 PRECPP = (sed 's_^//\#__g' | sed 's_DBG()//_DBG(_g')
 
 CPPFLAGS = -P -undef -Wundef -std=c99 -nostdinc -Wtrigraphs -fdollars-in-identifiers -C
-CPPDEBUGFLAGS = ${CPPFLAGS} -D DEBUG -D TRACE
+CPPDEBUGFLAGS = ${CPPFLAGS} -D DEBUG
 CPP = cpp
 
 BROWSERIFYFLAGS = -r ./index.js:tml -d

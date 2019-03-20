@@ -17,7 +17,7 @@
 //## include "__common.h"
 
 const { err_proof } = require('./messages');
-const { bdds } = require('./bdds');
+const { node, bdds } = require('./bdds');
 
 function varcount(v) {
 	const vars = [];
@@ -59,8 +59,7 @@ class rule_body {
 	}
 
 	from_arg(vij, j, bits, dsz, m) {
-		ID('from_arg');
-		TRC(`from_arg-${id}`);
+		ID_TRC('from_arg');
 		const eq = [];
 		const ctx = this.context;
 		const bdd = ctx.bdd;
@@ -90,7 +89,7 @@ class rule_body {
 	}
 
 	varbdd(db, cache) {
-		DBG(__varbdd(`varbdd(db: ${db} cache:`, cache, `this:`, this, `)`));
+		DBG(__varbdd(`varbdd(db: ${db} cache:`, cache, `)`));
 		const bdd = this.context.bdd;
 		const c = this.neg ? cache.neg : cache.pos;
 		const key = this.sel+'.'+this.ex.join(',');
@@ -122,7 +121,7 @@ class rule_body {
 class rule {
 	// initialize rule
 	constructor(v, bits, dsz, proof, context) {
-		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v, context));
+		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
 		const bdd = context.bdd;
 		const pad = context.pad;
 		this.context = context;

@@ -16,6 +16,8 @@
 
 //## include "__common.h"
 
+//## define MEMO
+
 //## ifdef MEMO
 //##   define apply_ret(r, m) m[t] = r; return r
 //## else
@@ -96,8 +98,7 @@ class bdds {
 	}
 
 	from_int(x, bits, offset) {
-		ID('from_int');
-		TRC(`from_int-${id}`);
+		ID_TRC('from_int');
 		let r = bdds.T;
 		let b = bits--;
 		while (b--) r = this.and(r, from_bit(bits-b+offset, x&(1<<b)));
@@ -147,7 +148,7 @@ class bdds {
 
 	// adds new node
 	add(n) {
-		ID('add');
+		ID_TRC('add');
 		DBG(__add(`add-${id} (${n.key})`));
 		//TRC(`add-${id}`);
 		let r = null;
@@ -164,6 +165,7 @@ class bdds {
 
 	sat(v, nvars, n, p, r, mod) {
 		ID_TRC('sat');
+		DBG(__bdd(`sat-${id} (v: ${v}, nvars: ${nvars}, n: ${n.key}, r: ${r})`));
 		if (nleaf(n) && !ntrueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
@@ -444,7 +446,7 @@ class bdds {
 
 	and_many(v, from = null, to = null) {
 		ID('and_many');
-		TRC(`and_many-${id} (v:${v.join(',')}, from: ${from}, to: ${to})`);
+		TRC(`and_many-${id} (v.length:${v.length}, from: ${from}, to: ${to})`);
 		from = from || 0;
 		to = to || v.length;
 		if (1 === (to - from)) return v[from];
@@ -519,7 +521,7 @@ class bdds {
 	}
 
 	permute(x, m) {
-		ID('permute');
+		ID_TRC('permute');
 		DBG(__permute(`permute-${id} (${x} permute ${m.join(',')})`));
 //## ifdef MEMO
 		const t = `${x}.${m.join(',')}`;

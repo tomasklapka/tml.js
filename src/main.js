@@ -42,6 +42,7 @@ async function main() {
 	// s = "test two.";
 	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
 	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
+	// s = `@in "abcd". e a 'a' 1.`;
 	// unless s, read source from stdin
 	if (s === null) {
 		try {
