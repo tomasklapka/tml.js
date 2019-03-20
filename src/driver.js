@@ -122,7 +122,7 @@ class driver {
 		for (let i = 0; i != r.e.length; ++i) {
 			const e = r.e[i];
 			if (e.type === elem.NUM) t[t.length] = e.num + 256;
-			else if (e.type === elem.CHR) t[t.length] = e.e[0].charCodeAt();
+			else if (e.type === elem.CHR) t[t.length] = e.e[0].charCodeAt()+1;
 			else if (e.type === elem.OPENP) t[t.length] = this.openp;
 			else if (e.type === elem.CLOSEP) t[t.length] = this.closep;
 			else t[t.length] = this.d.get_by_lex(e.e);
