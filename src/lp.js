@@ -51,7 +51,8 @@ class lp {
 	constructor(r, g, pg, prev, context) {
 		ID('lp');
 		DBG(this.__id = id);
-		context.bdd = bdd;
+		DBG(__cout(context));
+		if (context) context.bdd = bdd;
 		this.context = context;
 		this.bdd = bdd; // keep reference to the "global" bdd
 		this.pad = pad;
@@ -109,8 +110,8 @@ class lp {
 			}
 		}
 		if (this.pgoals.length) {
-			this.proof1 = new lp(this.get_proof1(), [], [], this);
-			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1);
+			this.proof1 = new lp(this.get_proof1(), [], [], this, this.context);
+			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1, this.context);
 		}
 		for (let i = 0; i != g; ++g) {
 			this.gbdd = bdd.or(this.gbdd, fact(g[i], this.bits));
@@ -120,7 +121,7 @@ class lp {
 	get_proof1() {
 		const p = [];
 		for (let i = 0; i != this.rules.length; ++i) {
-			p[p.length] = r.proof1;
+			p[p.length] = this.rules[i].proof1;
 		}
 		return p;
 	}
@@ -129,12 +130,15 @@ class lp {
 		const p = [];
 		const m = [];
 		for (let i = 0; i != this.rules.length; ++i) {
-			p[p.length] = r.proof2;
+			p[p.length] = this.rules[i].proof2;
 		}
 		for (let i = 0; i != this.pgoals.length; ++i) {
-			m[0] = this.pgoals[i];
-			m[0] = m[0].concat
+			m[0] = [ 1, this.context.openp ].concat(
+				this.pgoals[i].slice(1),
+				[ this.context.closep ]);
+			p[p.length] = m;
 		}
+		return p;
 	}
 
 	getdb() { return this.getbdd(this.db); }
@@ -238,19 +242,23 @@ class lp {
 		const del = { del: bdds.F };
 		this.proof1.db = this.get_varbdd(this.proof1.ar);
 		this.proof1.fwd(add, del);
-		this.proof1.db = bdd.or(this.proof2.db, add.add);
+		this.proof2.db = bdd.or(this.proof2.db, add.add);
 		this.proof2.prev = null;
-		if (del !== bdds.F) throw new Error('assert del == F');
+		if (del.del !== bdds.F) throw new Error('assert del == F');
 		if (!proof2.pfp()) throw new Error('proof2.pfp unsat');
-		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.nul, 0))
+		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.context.openp, 0))
 		if (this.gbdd === bdds.F) return t;
-		return bdd.and(this.gbdd, t);
+		return bdd.or(
+			align(bdd.and(this.gbdd, this.db),
+				this.ar, this.bits,
+				this.proof2.ar, this.proof2.bits),
+			t);
 	}
 
 	get_varbdd(par) {
 		let t = bdds.T;
 		for (let i = 0; i != this.rules.length; ++i) {
-			t = bdd.or(r.get_varbdd(bits, par), t);
+			t = bdd.or(this.rules[i].get_varbdd(this.bits, par), t);
 		}
 		return t;
 	}

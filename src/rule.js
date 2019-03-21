@@ -124,6 +124,8 @@ class rule {
 		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
 		const bdd = context.bdd;
 		const pad = context.pad;
+		const openp = context.openp;
+		const closep = context.closep;
 		this.context = context;
 		this.hsym = bdds.T;
 		this.vars_arity = null;
@@ -178,47 +180,53 @@ class rule {
 			}
 		}
 		this.vars_arity = k;
+
 		if (!proof) return;
-		if (neg) throw new Error(err_proof);
+		if (this.neg) throw new Error(err_proof);
 		for (let i = 0; i != this.bd.length; ++i) {
 			if (this.bd[i].neg) throw new Error(err_proof);
 		}
 
-		// null rule :- varbdd
-		this.proof1 = [ [ 1, nul], [ 1 ] ];
-		this.proof1[0] = this.proof1[0].concat(v[0]);
-		this.proof1[1] = this.proof1[1].concat(v[0]);
-		for (let i = 0; i != m.length; ++i) {
-			if (m[i] >= ar) {
-				this.proof1[1][this.proof1[1].length] = i;
+		const vars = [ 1, v[0] ];
+		const prule = [ 1, openp ];
+		const bprule = [ 1 ];
+		const vs = [];
+
+		for (let i = 0; i != v[0].length; ++i) { vs[vs.length] = v[0][i]; }
+
+		for (let i = 1; i != v.length; ++i) {
+			for (let j = 0; j != v[i].length; ++j) {
+				const t = v[i][j];
+				if (t < 0 && !vs.includes(t)) {
+					vs[vs.length] = t;
+					vars[vars.length] = t;
+				}
 			}
-		}
-		for (let i = 0; i != this.bd.length; ++i) {
-			this.proof1[0] = this.proof1[0].concat(v[i+1]);
-		}
-		for (let i = 0; i != this.proof1[0].length; ++i) {
-			if (this.proof1[0][i] === pad) {
-				this.proof1[0][i] = nul;
-			}
-		}
-		let t = []; // null body :- null rule, null head
-		this.proof2 = [];
-		for (let i = 0; i != this.bd.length; ++i) {
-			t[0] = t[0].concat([ 1, nul ], v[i+1]);
-			t[1] = this.proof1[0];
-			t[0] = t[0].concat(this.proof1[0].slice(2));
-			this.proof2[this.proof2.length] =
-				JSON.parse(JSON.stringify(t));
 		}
 		for (let i = 0; i != v.length; ++i) {
-			t[i+2] = t[i+2].concat([ 1, nul ], v[i]);
+			prule[prule.length] = v[i];
 		}
-		this.proof2[this.proof2.length] =
-			JSON.parse(JSON.stringify(t));
+		prule[prule.length] = closep;
+		bprule[bprule.length] = v[0];
+		bprule[bprule.length] = openp;
+		for (let i = 0; i != v.length; ++i) {
+			bprule[bprule.length] = v[i];
+		}
+		bprule[bprule.length] = closep;
+
+		this.proof1 = [ [ prule ], [ vars ] ];
+		this.proof2 = [];
+		const r = [ bprule, prule, [ 1, openp, v[0], closep ], closep ];
+		for (let i = 1; i != v.length; ++i) {
+			this.proof2[this.proof2.length] =
+				[ [ 1, openp, v[i], closep ], prule, r[2] ];
+			r[r.length] = [ 1, openp, v[i], closep ];
+		}
+		this.proof2[this.proof2.length] = JSON.parse(JSON.stringify(r));
 	}
 
-	fwd(db, bits, ar, s, p) {
-		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`,s,`p:`,p,`)`));
+	fwd(db, bits, ar, s) {
+		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`, s, `)`));
 		const bdd = this.context.bdd;
 		let vars = bdds.T;
 		const v = Array(this.bd.length + this.eqs.length + 1);
@@ -234,7 +242,7 @@ class rule {
 		v[i] = this.hsym;
 		vars = bdd.and_many(v);
 		if (bdds.F === vars) return bdds.F;
-		if (this.proof2.length && !p.includes(vars)) p[p.length] = vars;
+		if (this.proof2.length === 0 && !p.includes(vars)) p[p.length] = vars;
 		return bdd.deltail(vars, bits * ar);
 
 		// for (let j = 0; j < this.bd.length; j++) {
