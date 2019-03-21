@@ -215,7 +215,7 @@ class raw_rule {
 		ID_TRC('raw_rule.parse');
 		DBG(__parser(`raw_rule.parse(${l[pos.pos]})`));
 		const curr = pos.pos;
-		this.goal = l[pos.pos] === '!';
+		this.goal = l[pos.pos][0] === '!';
 		if (this.goal) {
 			this.pgoal = l[++pos.pos][0] === '!';
 			if (this.pgoal) { ++pos.pos; }

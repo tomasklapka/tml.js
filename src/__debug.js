@@ -1,7 +1,6 @@
 const __cout        = console.log;
 const __d           = require('debug');
 const __dict        = __d('tml:dict');
-const __pfp         = __d('tml:pfp');
 const __bdd         = __d('tml:bdd');
 const __add         = __d('tml:bdd:add');
 const __or          = __d('tml:bdd:or');
@@ -12,11 +11,13 @@ const __and_deltail = __d('tml:bdd:and_deltail');
 const __and_not     = __d('tml:bdd:and_not');
 const __permute     = __d('tml:bdd:permute');
 const __ite         = __d('tml:bdd:ite');
+const __driver      = __d('tml:driver');
 const __lexer       = __d('tml:lexer');
 const __parser      = __d('tml:parser');
+const __pfp         = __d('tml:pfp');
 const __varbdd      = __d('tml:pfp:varbdd');
 const __rule        = __d('tml:pfp:rule');
-const __driver      = __d('tml:pfp:driver');
+const __proof       = __d('tml:pfp:proof');
 const __counters    = {};
 const __counter     = name => {
 	if (!__counters.hasOwnProperty(name)) __counters[name] = 0;

@@ -202,10 +202,10 @@ class driver {
 		for (let i = 0; i != keys.length; ++i) {
 			const x = s[keys[i]];
 			for (let n = 0; n != x.length-1; ++n) {
-				m[m.length] = [[ 1, keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]];
+				m[m.length] = [[ 1, +keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]];
 			}
 			m[m.length] = [[
-				1, keys[i], x[x.length-1].charCodeAt()+1,
+				1, +keys[i], x[x.length-1].charCodeAt()+1,
 				x.length+256, this.nul ]];
 		}
 		const context = {

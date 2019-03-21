@@ -25,9 +25,10 @@ const pad = 0;
 
 function fact(v, bits) {
 	ID_TRC('fact');
+	DBG(__pfp(`fact(v: ${v}, bits: ${bits})`));
 	let r = bdds.T;
 	const m = {};
-	for (let j = 0; j != v.length; ++j) {
+	for (let j = 0; j != v.length - 1; ++j) {
 		if (v[j+1] >= 0) from_int_and(v[j+1], bits, j * bits, r);
 		else if (!m.hasOwnProperty(v[j+1])) m[v[j+1]] = j;
 		else {
@@ -68,34 +69,34 @@ class lp {
 		this.dsz = 0;
 		if (prev) this.ar = prev.ar;
 		else this.ar = 0;
-		for (let i = 0; i != r.length; ++i) {
-			for (let j = 0; j != r[i].length; ++j) {
-				this.ar = Math.max(this.ar, r[i][j].length -1);
-				for (let k = 0; k != r[i][j].length; ++k) {
-					if (r[i][j][k] > 0) this.dsz = Math.max(this.dsz, r[i][j][k]);
+		for (let i = 0; i != r.length; ++i) { const m = r[i];
+			for (let j = 0; j != m.length; ++j) { const t = m[j];
+				this.ar = Math.max(this.ar, t.length -1);
+				for (let k = 0; k != t.length; ++k) { const e = t[k];
+					if (e > 0) this.dsz = Math.max(this.dsz, e);
 				}
 			}
 		}
 		this.dsz = Math.max(prev ? prev.dsz : this.dsz+1, this.dsz+1);
-		for (let i = 0; i != g.length; ++i) {
-			for (let j = 0; j != g[i].length; ++j) {
-				const t = g[i][j];
-				if (t.length-1 > this.ar) throw new Error(err_goal_arity);
-				else for (let k = 0; k != t.length; ++k) {
-					if (t[k] > 0 && t[k] >= this.dsz) throw new Error(err_goal_sym);
-				}
+		for (let i = 0; i != g.length; ++i) { const t = g[i];
+			if (t.length-1 > this.ar) throw new Error(err_goal_arity);
+			else for (let j = 0; j != t.length; ++j) { const e = t[j];
+				if (e > 0 && e >= this.dsz) throw new Error(err_goal_sym);
 			}
 		}
 		for (let i = 0; i != this.pgoals.length; ++i) { const t = this.pgoals[i];
 			if (t.length-1 > this.ar) throw new Error(err_goal_arity);
-			else for (let k = 0; k != t.length; ++k) {
-				if (t[k] > 0 && t[k] >= this.dsz) throw new Error(err_goal_sym);
+			else for (let j = 0; j != t.length; ++j) { const e = t[j];
+				if (e > 0 && e >= this.dsz) throw new Error(err_goal_sym);
 			}
 		}
 		r = this.rules_pad(r);
-		g = this.rules_pad(g);
-		pg = this.rules_pad(pg);
+		g = this.rule_pad(g);
+		this.pgoals = this.rule_pad(this.pgoals);
 		this.bits = msb(this.dsz);
+		DBG(__rule('r', r));
+		DBG(__rule('g', g));
+		DBG(__rule('pg', this.pgoals));
 		for (let i = 0; i != r.length; ++i) {
 			if (r[i].length === 1) {
 				DBG(__rule('rule_add fact'));
@@ -109,11 +110,13 @@ class lp {
 				DBG(__rule('/rule_add rule:', this.rules[this.rules.length-1]));
 			}
 		}
+		DBG(__rule('rules:', this.rules));
+		DBG(process.exit(0));
 		if (this.pgoals.length) {
 			this.proof1 = new lp(this.get_proof1(), [], [], this, this.context);
 			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1, this.context);
 		}
-		for (let i = 0; i != g; ++g) {
+		for (let i = 0; i != g.length; ++i) {
 			this.gbdd = bdd.or(this.gbdd, fact(g[i], this.bits));
 		}
 	}
@@ -245,7 +248,7 @@ class lp {
 		this.proof2.db = bdd.or(this.proof2.db, add.add);
 		this.proof2.prev = null;
 		if (del.del !== bdds.F) throw new Error('assert del == F');
-		if (!proof2.pfp()) throw new Error('proof2.pfp unsat');
+		if (!this.proof2.pfp()) throw new Error('proof2.pfp unsat');
 		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.context.openp, 0))
 		if (this.gbdd === bdds.F) return t;
 		return bdd.or(

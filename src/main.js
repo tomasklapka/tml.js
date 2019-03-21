@@ -43,6 +43,7 @@ async function main() {
 	// s = "1 2. 3 4. ?x ?y :- ?y ?x.";
 	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
 	// s = `@in "abcd". e a 'a' 1.`;
+	// s = `wet :- rain. rain. !! wet.`;
 	// unless s, read source from stdin
 	if (s === null) {
 		try {
@@ -53,11 +54,10 @@ async function main() {
 			return 4;
 		}
 	}
-	const proof = process.argv.length === 3 && process.argv[2] === '-p';
-	const d = new driver(s, proof);
+	const d = new driver(s);
 	let r = false;
 	try {
-		r = d.pfp(proof); // run pfp logic program
+		r = d.pfp(); // run pfp logic program
 	} catch (err) {
 		console.log('PFP error', err);
 		return 2;
