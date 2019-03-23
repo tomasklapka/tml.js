@@ -50,12 +50,10 @@ class rule_body {
 			}
 		}
 		const m = {};
-		DBG(__rule(`rb1`));
 		for (let j = 0; j != ar; ++j) {
-			DBG(__rule(`rbj`, j));
 			this.from_arg(t[j], j, bits, dsz, m)
 		}
-		DBG(__rule(`rb2`));
+		DBG(__rule(`rule_body from_arg result:`, m));
 	}
 
 	from_arg(vij, j, bits, dsz, m) {
@@ -64,11 +62,10 @@ class rule_body {
 		const ctx = this.context;
 		const bdd = ctx.bdd;
 		const exclude = [ ctx.pad, ctx.openp, ctx.closep ];
-		if (vij >= 0) {
+		if (vij >= 0) { // sym
 			this.ex.fill(true, j * bits, (j+1) * bits);
-			// this.sel = from_int_and(vij, bits, j * bits, this.sel);
-		} else {
-			if (m.hasOwnProperty(vij)) {
+		} else { // var
+			if (m.hasOwnProperty(vij)) { // seen
 				this.ex.fill(true, j * bits, (j+1) * bits);
 				for (let b = 0; b != bits; ++b) {
 					eq[eq.length] = [ j * bits + b, m[vij] * bits + b ];
@@ -85,7 +82,6 @@ class rule_body {
 				this.eqs[e],
 				from_eq(eq[j][0], eq[j][1]));
 		}
-
 	}
 
 	varbdd(db, cache) {
@@ -132,7 +128,7 @@ class rule {
 		this.eqs = [];
 		this.p = [];
 		this.proof1 = [];
-		this.proof2 = [];
+		this.proof2 = new Set();
 		const ar = v[0].length - 1;
 		let k = ar;
 		this.neg = v[0][0] < 0;
@@ -164,10 +160,7 @@ class rule {
 				from_eq(heq[j][0], heq[j][1]));
 		}
 		for (let i = 0; i != v.length-1; ++i) {
-			DBG(__rule('i', i));
 			for (let j = 0; j != ar; ++j) {
-				DBG(__rule('j', j));
-				DBG(__rule('v[i+1][j]', v[i+1][j]));
 				if (v[i+1][j] < 0) {
 					if (!m.hasOwnProperty(v[i+1][j])) {
 						m[v[i+1][j]] = k++;
@@ -191,24 +184,31 @@ class rule {
 		const bprule = [ 1 ];
 		const vs = [];
 
-		for (let i = 0; i != v[0].length; ++i) { vs[vs.length] = v[0][i]; }
-
+		DBG(__rule(`v[0]:`, v[0]));
+		for (let i = 0; i != v[0].length; ++i) {
+			const t = MAX_INT+v[0][i];
+			if (v[0][i] < 0 && !vs.includes(t)) {
+				vs[vs.length] = t;
+				DBG(__proof(`vs: `, vs));
+			}
+		}
+		DBG(__rule(`v.tail:`, v.slice(1)));
 		for (let i = 1; i != v.length; ++i) {
 			for (let j = 0; j != v[i].length; ++j) {
-				const t = v[i][j];
-				if (t < 0 && !vs.includes(t)) {
+				const t = MAX_INT+v[i][j];
+				if (v[i][j] < 0 && !vs.includes(t)) {
 					vs[vs.length] = t;
-					vars[vars.length] = t;
+					vars[vars.length] = v[i][j];
+					DBG(__proof(`vs: `, vs));
 				}
 			}
 		}
 		DBG(__proof(`vs: `, vs));
 		DBG(__proof(`vars: `, vars));
-
+		//DBG(process.exit(0));
 		const pusher = Array.prototype.push;
 		const push = (into, arr) => { return pusher.apply(into, arr) };
 		for (let i = 0; i != v.length; ++i) {
-			console.log(v[i]);
 			push(prule, v[i]);
 		}
 		prule[prule.length] = closep;
@@ -216,22 +216,21 @@ class rule {
 		push(bprule, v[0]);
 		bprule[bprule.length] = openp;
 		for (let i = 1; i != v.length; ++i) {
-			console.log(v[i]);
 			push(bprule, v[i]);
 		}
 		bprule[bprule.length] = closep;
 
 		this.proof1 = [ prule,  vars ];
-		this.proof2 = [];
+		this.proof2 = new Set();
 		const r = [ bprule, prule, [ 1, openp ].concat(v[0], [ closep ]) ];
 		for (let i = 1; i != v.length; ++i) {
-			this.proof2[this.proof2.length] =
-				[ [ 1, openp ].concat(v[i], [ closep ]), prule, r[2] ];
+			this.proof2.add(
+				[ [ 1, openp ].concat(v[i], [ closep ]), prule, r[2] ]);
 			DBG(__proof(`proof2[${i-1}]: ${this.proof2.length}`, this.proof2));
 			r[r.length] = [ 1, openp ].concat(v[i], [ closep ]);
 			DBG(__proof(`r${i}: `, r));
 		}
-		this.proof2[this.proof2.length] = JSON.parse(JSON.stringify(r));
+		this.proof2.add(JSON.parse(JSON.stringify(r)));
 		DBG(__proof(`proof1: (length: ${this.proof1.length})`, this.proof1));
 		DBG(__proof(`proof2: (length: ${this.proof2.length})`, this.proof2));
 	}
@@ -253,13 +252,14 @@ class rule {
 		v[i] = this.hsym;
 		vars = bdd.and_many(v);
 		if (bdds.F === vars) return bdds.F;
-		if (this.proof2.length === 0 && !this.p.includes(vars)) {
+		if (this.proof2.length !== 0 && !this.p.includes(vars)) {
 			this.p[this.p.length] = vars;
 		}
 		return bdd.deltail(vars, bits * ar);
 	}
 
 	get_varbdd(bits, ar) {
+		DBG(__cout('varbdd:',this.p,this.vars_arity));
 		const bdd = this.context.bdd;
 		let x = bdds.T;
 		let y = bdds.F;

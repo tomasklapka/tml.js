@@ -64,14 +64,14 @@ class driver {
 		this.builtin_rels[this.builtin_rels.length] = rel;
 		for (; from !== to; ++from) {
 			if (fn(String.fromCharCode(from))) {
-				r[r.length] = [ [ 1, rel, from ] ];
+				r.add([ [ 1, rel, from ] ]);
 			}
 		}
 	}
 
 	get_char_builtins() {
 		ID_TRC('get_char_builtins');
-		const m = [];
+		const m = new Set();
 		this.from_func(isspace, 'space', 0, 255, m);
 		this.from_func(isalnum, 'alnum', 0, 255, m);
 		this.from_func(isalpha, 'alpha', 0, 255, m);
@@ -152,8 +152,8 @@ class driver {
 			let x = this.d.get_by_lex(p.p[0].e);
 			if (p.p.length === 2 && p.p[1].type === elem.SYM
 			&& nul === this.d.get_by_lex(p.p[1].e)) {
-				m[m.length] = [ [ 1, x, -1, -1 ], [ 1, rel, -2, -1, -3 ] ];
-				m[m.length] = [ [ 1, x, -1, -1 ], [ 1, rel, -2, -3, -1 ] ];
+				m.add([ [ 1, x, -1, -1 ], [ 1, rel, -2, -1, -3 ] ]);
+				m.add([ [ 1, x, -1, -1 ], [ 1, rel, -2, -3, -1 ] ]);
 				continue;
 			}
 			t[t.length] = [ 1, x, -1, -p.p.length ];
@@ -168,21 +168,21 @@ class driver {
 					t[t.length] = [ 1, rel, p.p[n].e[0]+1, v, v-1 ];
 				} else throw new Error("unexpected grammar node.\n");
 			}
-			m[m.length] = t;
+			m.add(t);
 			--v;
 		}
 	}
 
 	prog_init(p, s) {
 		ID_TRC('prog_init');
-		let m = [];
+		let m = new Set();
 		const g = [];
 		const pg = [];
 		if (p.g.length && s.length > 1) throw new Error("only one string allowed given grammar.\n");
 		this.grammar_to_rules(p.g, m, Object.keys(s)[0]);
 		if (p.d.length > 0) {
 			const rtxt = this.get_char_builtins();
-			m = m.concat(rtxt);
+			for (let e of rtxt) m.add(e);
 		}
 		DBG(__dict(this.d));
 		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];
@@ -194,7 +194,7 @@ class driver {
 					if (x.b.length !== 1) throw new Error ('assert x.b.length === 1');
 					pg[pg.length] = this.get_term(x.b[0]);
 				} else {
-					m[m.length] = this.get_rule(x);
+					m.add(this.get_rule(x));
 				}
 			}
 		}
@@ -202,20 +202,20 @@ class driver {
 		for (let i = 0; i != keys.length; ++i) {
 			const x = s[keys[i]];
 			for (let n = 0; n != x.length-1; ++n) {
-				m[m.length] = [[ 1, +keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]];
+				m.add([[ 1, +keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]]);
 			}
-			m[m.length] = [[
+			m.add([[
 				1, +keys[i], x[x.length-1].charCodeAt()+1,
-				x.length+256, this.nul ]];
+				x.length+256, this.nul ]]);
 		}
 		const context = {
 			pad: pad,
 			nul: this.nul,
 			openp: this.openp,
 			closep: this.closep };
+		DBG(context.driver = this);
 		this.prog = new lp(m, g, pg, this.prog, context);
 		this.prog.nul = this.nul;
-		DBG(this.prog.drv = this);
 		if (!s.length) {
 			for (let i = 0; i != this.builtin_rels.length; ++i) {
 				this.builtin_symbdds[this.builtin_symbdds.length] =
@@ -248,7 +248,7 @@ class driver {
 
 	printbdd_matrix(os = '', t = null) {
 		ID_TRC('printbdd');
-		DBG(__bdd(`printbdd(t: ${t})`, t, this.d));
+		DBG(__bdd(`printbdd_matrix:`, t));
 		const s = [];
 		for (let i = 0; i < t.length; i++) { const v = t[i];
 			let ss = '';

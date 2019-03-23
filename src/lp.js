@@ -52,8 +52,8 @@ class lp {
 	constructor(r, g, pg, prev, context) {
 		ID('lp');
 		DBG(this.__id = id);
-		DBG(__cout(context));
 		if (context) context.bdd = bdd;
+		DBG()//const drv = context.driver);
 		this.context = context;
 		this.bdd = bdd; // keep reference to the "global" bdd
 		this.pad = pad;
@@ -69,7 +69,7 @@ class lp {
 		this.dsz = 0;
 		if (prev) this.ar = prev.ar;
 		else this.ar = 0;
-		for (let i = 0; i != r.length; ++i) { const m = r[i];
+		for (let m of r) {
 			for (let j = 0; j != m.length; ++j) { const t = m[j];
 				this.ar = Math.max(this.ar, t.length -1);
 				for (let k = 0; k != t.length; ++k) { const e = t[k];
@@ -97,24 +97,28 @@ class lp {
 		DBG(__rule('r', r));
 		DBG(__rule('g', g));
 		DBG(__rule('pg', this.pgoals));
-		for (let i = 0; i != r.length; ++i) {
-			if (r[i].length === 1) {
+		for (let m of r) {
+			if (m.length === 1) {
 				DBG(__rule('rule_add fact'));
-				this.db = bdd.or(this.db, fact(r[i][0], this.bits));
+				this.db = bdd.or(this.db, fact(m[0], this.bits));
 				DBG(__rule('/rule_add fact added db:', this.db));
 			} else {
 				DBG(__rule('rule_add rule'));
 				this.rules[this.rules.length] =
-					new rule(r[i], this.bits, this.dsz,
+					new rule(m, this.bits, this.dsz,
 						this.pgoals.length > 0, context);
-				DBG(__rule('/rule_add rule:', this.rules[this.rules.length-1]));
+				DBG(__rule('/rule_add rule:', this.rules.length));
 			}
 		}
 		DBG(__rule('rules:', this.rules));
-		DBG(process.exit(0));
 		if (this.pgoals.length) {
 			this.proof1 = new lp(this.get_proof1(), [], [], this, this.context);
+			DBG(drv.printdb('proof1: ', this.proof1));
+			DBG(__proof('p1', this.proof1.bdd.V.length));
 			this.proof2 = new lp(this.get_proof2(), [], [], this.proof1, this.context);
+			DBG(drv.printdb('proof2: ', this.proof2));
+			DBG(__proof('p2', this.proof2.bdd.V.length));
+			//DBG(process.exit(0));
 		}
 		for (let i = 0; i != g.length; ++i) {
 			this.gbdd = bdd.or(this.gbdd, fact(g[i], this.bits));
@@ -122,25 +126,28 @@ class lp {
 	}
 
 	get_proof1() {
-		const p = [];
+		const p = new Set();
 		for (let i = 0; i != this.rules.length; ++i) {
-			p[p.length] = this.rules[i].proof1;
+			p.add(this.rules[i].proof1);
 		}
+		DBG(__proof(`get proof1():`, p));
 		return p;
 	}
 
 	get_proof2() {
-		const p = [];
-		const m = [];
+		let p = new Set();
 		for (let i = 0; i != this.rules.length; ++i) {
-			p[p.length] = this.rules[i].proof2;
+			p = new Set(p, this.rules[i].proof2);
+			DBG(__proof(`      get proof2() r  adding:`, this.rules[i].proof2));
 		}
 		for (let i = 0; i != this.pgoals.length; ++i) {
-			m[0] = [ 1, this.context.openp ].concat(
+			const m = [ 1, this.context.openp ].concat(
 				this.pgoals[i].slice(1),
 				[ this.context.closep ]);
-			p[p.length] = m;
+			p.add([ m ]);
+			DBG(__proof(`      get proof2() pg adding:`, [ m ]));
 		}
+		DBG(__proof(`get proof2():`, p));
 		return p;
 	}
 
@@ -169,11 +176,11 @@ class lp {
 	rules_pad(t) {
 		ID_TRC('rules_pad');
 		DBG(__pfp(`t `, t));
-		const r = [];
-		for (let i = 0; i != t.length; ++i) {
-			r[r.length] = this.rule_pad(t[i]);
+		const nm = new Set();
+		for (let m of t) {
+			nm.add(this.rule_pad(m));
 		}
-		return r;
+		return nm;
 	}
 
 	fwd(add, del) {
@@ -231,7 +238,9 @@ class lp {
 		};
 		//DBG(this.drv.printdb("after: ", this));
 		if (this.proof1) {
+			DBG(__proof('proof 1 true'));
 			this.db = this.prove();
+			DBG(__proof('proof 1 db:', this.db));
 			this.ar = this.proof2.ar;
 			this.bits = this.proof2.bits;
 			return true;
@@ -244,22 +253,30 @@ class lp {
 		const add = { add: bdds.F };
 		const del = { del: bdds.F };
 		this.proof1.db = this.get_varbdd(this.proof1.ar);
+		DBG(__cout('prove proof 1 db:', this.proof1.db));
 		this.proof1.fwd(add, del);
 		this.proof2.db = bdd.or(this.proof2.db, add.add);
+		DBG(__cout('prove proof 2 db:', this.proof2.db));
 		this.proof2.prev = null;
 		if (del.del !== bdds.F) throw new Error('assert del == F');
 		if (!this.proof2.pfp()) throw new Error('proof2.pfp unsat');
 		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.context.openp, 0))
-		if (this.gbdd === bdds.F) return t;
-		return bdd.or(
+		if (this.gbdd === bdds.F) {
+			DBG(__proof('prove(gbdd==F) =', t));
+			return t;
+		}
+		const res = bdd.or(
 			align(bdd.and(this.gbdd, this.db),
 				this.ar, this.bits,
 				this.proof2.ar, this.proof2.bits),
 			t);
+		DBG(__proof('prove =', res));
+		//process.exit(0);
+		return res;
 	}
 
 	get_varbdd(par) {
-		let t = bdds.T;
+		let t = bdds.F;
 		for (let i = 0; i != this.rules.length; ++i) {
 			t = bdd.or(this.rules[i].get_varbdd(this.bits, par), t);
 		}
@@ -305,21 +322,6 @@ class lp {
 		return r;
 	}
 
-	maxw() {
-		let r = 0;
-		for (let i = 0; i != this.rules.length; ++i) {
-			r = Math.max(r, this.rules[i].bd.length);
-		}
-		return r;
-	}
-
-	get_proof_rules() {
-		let r = [];
-		for (let i = 0; i != this.rules.length; ++i) {
-			r[r.length] = this.rules[i].proof
-		}
-		return r;
-	}
 }
 
 lp.pad = pad;
