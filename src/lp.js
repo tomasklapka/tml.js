@@ -16,7 +16,7 @@
 
 //## include "__common.h"
 
-const bdd = require('./bdds');
+const { bdd } = require('./bdd');
 const { fact, rule } = require('./rule');
 const { err_goal_arity, err_goal_sym } = require('./messages');
 

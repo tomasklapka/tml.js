@@ -49,7 +49,6 @@ const bdd_F = 0;
 const bdd_T = 1;
 
 class bdd {
-	static get node() { return node; }
 	static get F() { return bdd_F; }
 	static get T() { return bdd_T; }
 	// length getter
@@ -596,4 +595,5 @@ class bdd {
 	}
 }
 
-module.exports = new bdd();
+const global_bdd = new bdd();
+module.exports = { node, bdd: global_bdd };

@@ -21,7 +21,7 @@ const {
 } = require('./input');
 const { dict } = require('./dict');
 const { lp, pad } = require('./lp');
-const bdd = require('./bdds');
+const { bdd } = require('./bdd');
 
 const { err_null_in_head, err_null } = require('./messages');
 

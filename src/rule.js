@@ -17,7 +17,7 @@
 //## include "__common.h"
 
 const { err_proof } = require('./messages');
-const bdd = require('./bdds');
+const { node, bdd } = require('./bdd');
 
 function fact(v, bits, context) {
 	ID_TRC('fact');

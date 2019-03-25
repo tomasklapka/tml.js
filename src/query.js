@@ -16,7 +16,7 @@
 
 //## include "__common.h"
 
-const bdd = require('./bdds');
+const { bdd } = require('./bdd');
 
 function from_term(t) {
     const r = Array(t.length-1);
