@@ -44,6 +44,7 @@ async function main() {
 	// s = `a b. c d. f e. ?x ?y :- ?y ?x. ?x ?x :- ?x e.`;
 	// s = `@in "abcd". e a 'a' 1.`;
 	// s = `wet :- rain. rain. !! wet.`;
+	// s = `@str "()". S := null. S := '(' S ')' S.`; // ! S ?x null.`
 	// unless s, read source from stdin
 	if (s === null) {
 		try {

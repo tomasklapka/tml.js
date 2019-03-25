@@ -163,32 +163,32 @@ class bdds {
 		return r;
 	}
 
-	sat(v, nvars, n, p, r, mod) {
+	sat(v, nvars, n, p, r) {
 		ID_TRC('sat');
 		DBG(__bdd(`sat-${id} (v: ${v}, nvars: ${nvars}, n: ${n.key}, r: ${r})`));
 		if (nleaf(n) && !ntrueleaf(n)) return;
 		if (v < n.v) {
 			p[v-1] = true;
-			this.sat(v+1, nvars, n, p, r, mod);
+			this.sat(v+1, nvars, n, p, r);
 			p[v-1] = false;
-			this.sat(v+1, nvars, n, p, r, mod);
+			this.sat(v+1, nvars, n, p, r);
 		} else {
 			if (v !== nvars+1) {
 				p[v-1] = true;
-				this.sat(v+1, nvars, getnode(n.hi), p, r, mod);
+				this.sat(v+1, nvars, getnode(n.hi), p, r);
 				p[v-1] = false;
-				this.sat(v+1, nvars, getnode(n.lo), p, r, mod);
+				this.sat(v+1, nvars, getnode(n.lo), p, r);
 			}	else {
 				r[r.length] = p.slice();
 			}
 		}
 	}
 
-	allsat(x, nvars, mod) {
+	allsat(x, nvars) {
 		ID_TRC('allsat');
 		DBG(__bdd(`allsat-${id} (x: ${x}, nvars: ${nvars})`, x));
 		const p = Array(nvars).fill(false); const r = [];
-		this.sat(1, nvars, getnode(x), p, r, mod);
+		this.sat(1, nvars, getnode(x), p, r);
 		return r;
 	}
 

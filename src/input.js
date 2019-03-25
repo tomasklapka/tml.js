@@ -80,10 +80,9 @@ function lex(s) {
 		return ret(t);
 	}
 	if (s.s[0] === ':') {
-		skip(s);
-		if (s.s[0] === '-'
-		|| s.s[0] === '=') { return ret(':-', 1); }
-		else throw new Error(err_chr);
+		if (s.s[1] === '-' || s.s[1] === '=') {
+			return ret(t, 2);
+		} else throw new Error(err_chr);
 	}
 	if ("!~.,(){}@".indexOf(s.s[0]) !== -1) { return ret(s.s[0], 1); }
 	if ("?-".indexOf(s.s[0]) !== -1) skip(s);

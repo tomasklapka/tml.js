@@ -42,8 +42,6 @@ class driver {
 				return
 			}
 		}
-		DBG(__cout(rp.p[0]));
-		DBG(__cout(rp.p[0].r[0].b[0].e));
 		for (let n = 0; n != rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
 			this.openp = this.d.get_by_str("(");
@@ -144,32 +142,32 @@ class driver {
 		return m;
 	}
 
-	grammar_to_rules(g, m) {
+	grammar_to_rules(g, m, rel) {
 		for (let i = 0; i != g.length; ++i) { const p = g[i]; // production
 			if (p.p.length < 2) throw new Error("empty production.\n");
 			const t = [];
 			let v = -1;
 			let x = this.d.get_by_lex(p.p[0].e);
 			if (p.p.length === 2 && p.p[1].type === elem.SYM
-			&& nul === this.d.get_by_lex(p.p[1].e)) {
-				m.add([ [ 1, x, -1, -1 ], [ 1, rel, -2, -1, -3 ] ]);
+			&& this.nul === this.d.get_by_lex(p.p[1].e)) {
 				m.add([ [ 1, x, -1, -1 ], [ 1, rel, -2, -3, -1 ] ]);
+				m.add([ [ 1, x, -1, -1 ], [ 1, rel, -2, -1, -3 ] ]);
 				continue;
 			}
 			t[t.length] = [ 1, x, -1, -p.p.length ];
 			for (let n = 1; n < p.p.length; ++n) {
 				if (p.p[n].type === elem.SYM) {
 					x = this.d.get_by_lex(p.p[n].e);
-					if (nul === x) throw new Error(err_null);
+					if (this.nul === x) throw new Error(err_null);
 					t[t.length] = [ 1, x, v, v-1 ];
 				}
 				else if (p.p[n].type === elem.CHR) {
 					if (!n) throw new Error("grammar lhs cannot be a terminal.\n");
-					t[t.length] = [ 1, rel, p.p[n].e[0]+1, v, v-1 ];
+					t[t.length] = [ 1, +rel, p.p[n].e.charCodeAt()+1, v, v-1 ];
 				} else throw new Error("unexpected grammar node.\n");
+				--v;
 			}
 			m.add(t);
-			--v;
 		}
 	}
 
@@ -179,10 +177,10 @@ class driver {
 		const g = [];
 		const pg = [];
 		if (p.g.length && s.length > 1) throw new Error("only one string allowed given grammar.\n");
-		this.grammar_to_rules(p.g, m, Object.keys(s)[0]);
+		this.grammar_to_rules(p.g, m, +(Object.keys(s)[0]));
 		if (p.d.length > 0) {
 			const rtxt = this.get_char_builtins();
-			for (let e of rtxt) m.add(e);
+			rtxt.forEach(m.add, m);
 		}
 		DBG(__dict(this.d));
 		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];

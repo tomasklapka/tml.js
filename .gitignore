@@ -4,6 +4,7 @@ browser
 build
 debug
 .bin
+.idea
 .vscode
 *.dot
 *.svg

@@ -135,9 +135,9 @@ class lp {
 	}
 
 	get_proof2() {
-		let p = new Set();
+		const p = new Set();
 		for (let i = 0; i != this.rules.length; ++i) {
-			p = new Set(p, this.rules[i].proof2);
+			this.rules[i].proof2.forEach(p.add, p);
 			DBG(__proof(`      get proof2() r  adding:`, this.rules[i].proof2));
 		}
 		for (let i = 0; i != this.pgoals.length; ++i) {
@@ -297,7 +297,7 @@ class lp {
 		while (n--) {
 			for (let i = 0; i != ar; ++i) {
 				for (let b = 0; b != bits; ++b) {
-					if (s[n][i * bits + b] > 0) {
+					if (s[n][i * bits + b]) {
 						r[n][i] |= 1 << (bits - b - 1);
 					}
 				}
