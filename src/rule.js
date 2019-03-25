@@ -17,7 +17,27 @@
 //## include "__common.h"
 
 const { err_proof } = require('./messages');
-const { node, bdds } = require('./bdds');
+const bdd = require('./bdds');
+
+function fact(v, bits, context) {
+	ID_TRC('fact');
+	DBG(__pfp(`fact(v: ${v}, bits: ${bits})`));
+	let r = bdd.T;
+	const m = {};
+	for (let j = 0; j != v.length - 1; ++j) {
+		if (v[j+1] >= 0) from_int_and(v[j+1], bits, j * bits, r);
+		else if (!m.hasOwnProperty(v[j+1])) m[v[j+1]] = j;
+		else {
+			const pos = m[v[j+1]] * bits;
+			for (let b = 0; b != bits; ++b) {
+				r = bdd.and(r, from_eq(j*bits+b, pos+b));
+			}
+		}
+	}
+	return v[0] < 0
+		? bdd.and_not(bdd.T, r)
+		: r;
+}
 
 function varcount(v) {
 	const vars = [];
@@ -33,11 +53,10 @@ function varcount(v) {
 
 class rule_body {
 	constructor(t, ar, bits, dsz, nvars, eqs, context) {
-		const bdd = context.bdd;
 		this.context = context;
 		this.eqs = eqs;
 		this.neg = t[0] < 0;
-		this.sel = bdds.T;
+		this.sel = bdd.T;
 		this.ex = new Array(bits * ar).fill(false);
 		this.perm = new Array((ar + nvars) * bits);
 		t.shift();
@@ -60,7 +79,6 @@ class rule_body {
 		ID_TRC('from_arg');
 		const eq = [];
 		const ctx = this.context;
-		const bdd = ctx.bdd;
 		const exclude = [ ctx.pad, ctx.openp, ctx.closep ];
 		if (vij >= 0) { // sym
 			this.ex.fill(true, j * bits, (j+1) * bits);
@@ -76,7 +94,7 @@ class rule_body {
 			}
 		}
 		for (let j = 0; j != eq.length; ++j) {
-			if (!(j % 8)) this.eqs[this.eqs.length] = bdds.T;
+			if (!(j % 8)) this.eqs[this.eqs.length] = bdd.T;
 			const e = this.eqs.length-1;
 			this.eqs[e] = bdd.and(
 				this.eqs[e],
@@ -86,7 +104,6 @@ class rule_body {
 
 	varbdd(db, cache) {
 		DBG(__varbdd(`varbdd(db: ${db} cache:`, cache, `)`));
-		const bdd = this.context.bdd;
 		const c = this.neg ? cache.neg : cache.pos;
 		const key = this.sel+'.'+this.ex.join(',');
 		if (c.hasOwnProperty(key)) {
@@ -98,16 +115,16 @@ class rule_body {
 			? bdd.and_not(this.sel, db)
 			: bdd.and(this.sel, db);
 		ret:do {
-			if (r === bdds.F) break;
+			if (r === bdd.F) break;
 			let n = this.eqs.length;
 			while (n) {
 				r = bdd.and(r, this.eqs[--n]);
-				if (r === bdds.F) break ret;
+				if (r === bdd.F) break ret;
 			}
 			r = bdd.ex(r, this.ex);
 		} while (0);
 		c[key] = r;
-		const res = r === bdds.F ? bdds.F : bdd.permute(r, this.perm);
+		const res = r === bdd.F ? bdd.F : bdd.permute(r, this.perm);
 		DBG(__varbdd("varbdd res =", res));
 		return res;
 	};
@@ -116,13 +133,12 @@ class rule_body {
 // a P-DATALOG rule in bdd form
 class rule {
 	constructor(v, bits, dsz, proof, context) {
-		DBG(__cout(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
-		const bdd = context.bdd;
+		DBG(__rule(`new rule() bits: ${bits}, dsz: ${dsz}, v.size: ${v.length} v:`, v));
 		const pad = context.pad;
 		const openp = context.openp;
 		const closep = context.closep;
 		this.context = context;
-		this.hsym = bdds.T;
+		this.hsym = bdd.T;
 		this.vars_arity = null;
 		this.bd = [];
 		this.eqs = [];
@@ -153,7 +169,7 @@ class rule {
 			}
 		}
 		for (let j = 0; j != heq.length; ++j) {
-			if (!(j % 8)) this.eqs[this.eqs.length] = bdds.T;
+			if (!(j % 8)) this.eqs[this.eqs.length] = bdd.T;
 			const e = this.eqs.length-1;
 			this.eqs[e] = bdd.and(
 				this.eqs[e],
@@ -237,13 +253,12 @@ class rule {
 
 	fwd(db, bits, ar, s) {
 		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar}, s:`, s, `)`));
-		const bdd = this.context.bdd;
-		let vars = bdds.T;
+		let vars = bdd.T;
 		const v = Array(this.bd.length + this.eqs.length + 1);
 		let i = 0;
 		for (let j = 0; j != this.bd.length; ++j) {
 			vars = this.bd[j].varbdd(db, s)
-			if (bdds.F === vars) return bdds.F;
+			if (bdd.F === vars) return bdd.F;
 			else v[i++] = vars;
 		}
 		for (let j = 0; j != this.eqs.length; ++j) {
@@ -251,7 +266,7 @@ class rule {
 		}
 		v[i] = this.hsym;
 		vars = bdd.and_many(v);
-		if (bdds.F === vars) return bdds.F;
+		if (bdd.F === vars) return bdd.F;
 		if (this.proof2.length !== 0 && !this.p.includes(vars)) {
 			this.p[this.p.length] = vars;
 		}
@@ -260,9 +275,8 @@ class rule {
 
 	get_varbdd(bits, ar) {
 		DBG(__cout('varbdd:',this.p,this.vars_arity));
-		const bdd = this.context.bdd;
-		let x = bdds.T;
-		let y = bdds.F;
+		let x = bdd.T;
+		let y = bdd.F;
 		for (let i = 0; i != this.p.length; ++i) {
 			y = bdd.or(y, this.p[i]);
 		}
@@ -273,4 +287,4 @@ class rule {
 	}
 }
 
-module.exports = { rule }
+module.exports = { fact, rule }

@@ -16,32 +16,11 @@
 
 //## include "__common.h"
 
-const { bdds } = require('./bdds');
-const { rule } = require('./rule');
+const bdd = require('./bdds');
+const { fact, rule } = require('./rule');
 const { err_goal_arity, err_goal_sym } = require('./messages');
 
-const bdd = new bdds();
 const pad = 0;
-
-function fact(v, bits) {
-	ID_TRC('fact');
-	DBG(__pfp(`fact(v: ${v}, bits: ${bits})`));
-	let r = bdds.T;
-	const m = {};
-	for (let j = 0; j != v.length - 1; ++j) {
-		if (v[j+1] >= 0) from_int_and(v[j+1], bits, j * bits, r);
-		else if (!m.hasOwnProperty(v[j+1])) m[v[j+1]] = j;
-		else {
-			const pos = m[v[j+1]] * bits;
-			for (let b = 0; b != bits; ++b) {
-				r = bdd.and(r, from_eq(j*bits+b, pos+b));
-			}
-		}
-	}
-	return v[0] < 0
-		? bdd.and_not(bdds.T, r)
-		: r;
-}
 
 function align(x, par, pbits, ar, bits) {
 	return bdd.pad(bdd.rebit(x, pbits, bits, ar*bits), par, ar, pad, bits);
@@ -51,14 +30,12 @@ function align(x, par, pbits, ar, bits) {
 class lp {
 	constructor(r, g, pg, prev, context) {
 		ID('lp');
-		DBG(this.__id = id);
-		if (context) context.bdd = bdd;
+		DBG(this.__id = __id);
 		DBG()//const drv = context.driver);
 		this.context = context;
-		this.bdd = bdd; // keep reference to the "global" bdd
 		this.pad = pad;
-		this.db = bdds.F; // db root
-		this.gbdd = bdds.F;
+		this.db = bdd.F; // db root
+		this.gbdd = bdd.F;
 		this.proof1 = null; // lp
 		this.proof2 = null; // lp
 		this.rules = []; // p-datalog rules
@@ -100,7 +77,7 @@ class lp {
 		for (let m of r) {
 			if (m.length === 1) {
 				DBG(__rule('rule_add fact'));
-				this.db = bdd.or(this.db, fact(m[0], this.bits));
+				this.db = bdd.or(this.db, fact(m[0], this.bits, context));
 				DBG(__rule('/rule_add fact added db:', this.db));
 			} else {
 				DBG(__rule('rule_add rule'));
@@ -152,8 +129,8 @@ class lp {
 	}
 
 	getdb() { return this.getbdd(this.db); }
-	getbdd(t) { return this.from_bits(t, this.bits, this.ar); }
-	getbdd_one(t) { return [ this.one_from_bits(t, this.bits, this.ar) ]; }
+	getbdd(t) { return bdd.from_bits(t, this.bits, this.ar); }
+	getbdd_one(t) { return [ bdd.one_from_bits(t, this.bits, this.ar) ]; }
 
 	term_pad(t) {
 		ID_TRC('term_pad');
@@ -215,8 +192,8 @@ class lp {
 		const add = {};
 		const del = {};
 		for (;;) {
-			add.add = bdds.F;
-			del.del = bdds.F;
+			add.add = bdd.F;
+			del.del = bdd.F;
 			d = this.db;       // get current db root
 			s[s.length] = d;           // store current db root into steps
 			DBG(__pfp(`____________________STEP_${++step}________________________`))
@@ -225,7 +202,7 @@ class lp {
 			DBG(__pfp(`___________________/STEP_${step}________________________`))
 			t = bdd.and_not(add.add, del.del);
 			DBG(__pfp('db:', this.db, 'add:', add.add, 'del:', del.del, 't:', t))
-			if (t === bdds.F && add.add !== bdds.F) {
+			if (t === bdd.F && add.add !== bdd.F) {
 				DBG(__pfp('db set (contradiction):', this.db));
 				return false;
 			} else {
@@ -245,23 +222,23 @@ class lp {
 			this.bits = this.proof2.bits;
 			return true;
 		}
-		if (this.gbdd !== bdds.F) this.db = bdd.and(this.gbdd, this.db);
+		if (this.gbdd !== bdd.F) this.db = bdd.and(this.gbdd, this.db);
 		return true;
 	}
 
 	prove() {
-		const add = { add: bdds.F };
-		const del = { del: bdds.F };
+		const add = { add: bdd.F };
+		const del = { del: bdd.F };
 		this.proof1.db = this.get_varbdd(this.proof1.ar);
 		DBG(__cout('prove proof 1 db:', this.proof1.db));
 		this.proof1.fwd(add, del);
 		this.proof2.db = bdd.or(this.proof2.db, add.add);
 		DBG(__cout('prove proof 2 db:', this.proof2.db));
 		this.proof2.prev = null;
-		if (del.del !== bdds.F) throw new Error('assert del == F');
+		if (del.del !== bdd.F) throw new Error('assert del == F');
 		if (!this.proof2.pfp()) throw new Error('proof2.pfp unsat');
 		const t = bdd.and_not(this.proof2.db, this.get_sym_bdd(this.context.openp, 0))
-		if (this.gbdd === bdds.F) {
+		if (this.gbdd === bdd.F) {
 			DBG(__proof('prove(gbdd==F) =', t));
 			return t;
 		}
@@ -276,7 +253,7 @@ class lp {
 	}
 
 	get_varbdd(par) {
-		let t = bdds.F;
+		let t = bdd.F;
 		for (let i = 0; i != this.rules.length; ++i) {
 			t = bdd.or(this.rules[i].get_varbdd(this.bits, par), t);
 		}
@@ -287,45 +264,9 @@ class lp {
 		return bdd.from_int(sym, this.bits, this.bits * pos);
 	}
 
-	from_bits(x, bits, ar) {
-		const s = bdd.allsat(x, bits * ar, bits);
-		const r = Array(s.length);
-		for (let k = 0; k < r.length; k++) {
-			r[k] = Array(ar).fill(0);
-		}
-		let n = s.length;
-		while (n--) {
-			for (let i = 0; i != ar; ++i) {
-				for (let b = 0; b != bits; ++b) {
-					if (s[n][i * bits + b]) {
-						r[n][i] |= 1 << (bits - b - 1);
-					}
-				}
-				// if (r[n][i] === pad) break;
-			}
-		}
-		return r;
-	}
-
-	one_from_bits(x, bits, ar) {
-		const s = Array(bits * ar).fill(true);
-		if (!bdd.onesat(x, bits * ar, s)) return [];
-		const r = Array(ar).fill(0);
-		for (let i = 0; i != ar; ++i) {
-			for (let b = 0; b != bits; ++b) {
-				if (s[i * bits + b] > 0) {
-					r[i] |= 1 << (bits - b - 1);
-				}
-			}
-			// if (r[i] === pad) break;
-		}
-		return r;
-	}
-
 }
 
 lp.pad = pad;
-lp.bdd = bdd;
 
 module.exports = {
 	lp, pad

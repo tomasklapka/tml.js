@@ -13,11 +13,14 @@
 // Author of the Javascript rewrite: Tomáš Klapka <tomas@klapka.cz>
 
 //#define TRACE
+//#define DEBUG
+
+#define MEMO
 
 #ifdef DEBUG
 #  include "__debug.js"
 
-#  define ID(x) const id = __counter(x)
+#  define ID(x) const __id = __counter(x)
 #  define DBG(x) x
 #  ifdef TRACE
 #    define TRC(x) __cout(x)
@@ -33,7 +36,7 @@
 
 #endif
 
-#define ID_TRC(x) ID(x); TRC(x+'-'+id)
+#define ID_TRC(x) ID(x); TRC(x+'-'+__id)
 
 #define MAX_INT 4294967296
 
@@ -42,9 +45,14 @@
 #define from_int_and(x, y, o, r) (r = bdd.and(r, bdd.from_int(x, y, o)))
 
 #define from_bit(x, v) (bdd.add((v) \
-	? new node((x)+1, bdds.T, bdds.F) \
-	: new node((x)+1, bdds.F, bdds.T)))
+	? new node((x)+1, bdd.T, bdd.F) \
+	: new node((x)+1, bdd.F, bdd.T)))
 
 #define from_eq(x, y) ((x) < (y) \
 	? bdd.add(new node((x)+1, from_bit((y), true), from_bit((y), false))) \
 	: bdd.add(new node((y)+1, from_bit((x), true), from_bit((x), false))))
+
+#define leaf(x) (((x) === bdd.T) || ((x) === bdd.F))
+#define nleaf(x) ((x).v === 0)
+#define trueleaf(x) ((x) === bdd.T)
+#define ntrueleaf(x) (nleaf(x) && (x).hi > 0)

@@ -21,6 +21,7 @@ const {
 } = require('./input');
 const { dict } = require('./dict');
 const { lp, pad } = require('./lp');
+const bdd = require('./bdds');
 
 const { err_null_in_head, err_null } = require('./messages');
 
@@ -37,10 +38,7 @@ class driver {
 		if (!(rp instanceof raw_progs)) {
 			try {
 				rp = new raw_progs(rp);
-			} catch (err) {
-				console.log('Parse error:', err);
-				return
-			}
+			} catch (err) { console.log('Parse error:', err); return; }
 		}
 		for (let n = 0; n != rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
@@ -95,7 +93,7 @@ class driver {
 				}
 			}
 		}
-		DBG(__dict(`get_nums-${id} = ${nums}`));
+		DBG(__dict(`get_nums-${__id} = ${nums}`));
 		return nums;
 	}
 
@@ -220,7 +218,7 @@ class driver {
 					this.prog.get_sym_bdd(this.builtin_rels[i], 0);
 			}
 		}
-		DBG(__bdd(`prog_read bdd:`, this.prog.bdd.V.map(n=>`${this.prog.bdd.M[n.key]}=(${n.key})`).join(', ')))
+		DBG(__bdd(`prog_read bdd:`, bdd.V.map(n=>`${bdd.M[n.key]}=(${n.key})`).join(', ')))
 		DBG(__bdd(`prog_read bits: ${this.bits}`))
 		return p;
 	}
@@ -231,7 +229,7 @@ class driver {
 
 		let db = this.prog.db;
 		for (let i = 0; i != this.builtin_symbdds.length; ++i) {
-			db = this.prog.bdd.and_not(db, this.builtin_symbdds[i]);
+			db = bdd.and_not(db, this.builtin_symbdds[i]);
 		}
 		console.log(this.printbdd_matrix('', this.prog.getbdd(db)));
 		return true;
