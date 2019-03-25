@@ -271,11 +271,16 @@ class driver {
 		return this.printbdd(os, this.prog.getbdd_one(t));
 	}
 
+	printbdd_tbitsar(os = '', t, bits, ar) {
+		return this.printbdd(os, bdd.from_bits(t, bits, ar));
+	}
+
 	printdb(os, p = null) {
 		ID_TRC('printdb');
 		p = p || this.prog;
 		return this.printbdd(os, p, p.db);
 	}
+
 	toString() { return this.printdb(); }
 
 }

@@ -25,8 +25,8 @@ BROWSERIFY = ${NODE_BIN}browserify
 MINIFY = ${NODE_BIN}terser
 EXORCIST = ${NODE_BIN}exorcist
 
-SRC = input.js driver.js lp.js bdd.js messages.js dict.js rule.js main.js
-DEBUG_SRC = input.debug.js driver.debug.js lp.debug.js bdds.debug.js messages.debug.js dict.debug.js rule.debug.js main.debug.js
+SRC = input.js driver.js lp.js bdd.js messages.js dict.js rule.js main.js query.js
+DEBUG_SRC = input.debug.js driver.debug.js lp.debug.js bdds.debug.js messages.debug.js dict.debug.js rule.debug.js main.debug.js query.debug.js
 BROWSER_FILES = tml.min.js tml.debug.min.js tml.js tml.debug.js tml.wmap.js tml.debug.wmap.js tml.map.js tml.debug.map.js
 
 all: tml.min.js tml.debug.min.js
@@ -66,11 +66,13 @@ rule.js:
 lp.js:
 	${CD_SRC} && $(PRECPP) < lp.js       | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}lp.js;       ${CD_ROOT}
 bdd.js:
-	${CD_SRC} && $(PRECPP) < bdd.js     | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}bdd.js;     ${CD_ROOT}
+	${CD_SRC} && $(PRECPP) < bdd.js      | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}bdd.js;      ${CD_ROOT}
 messages.js:
 	${CD_SRC} && $(PRECPP) < messages.js | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}messages.js; ${CD_ROOT}
 main.js:
 	${CD_SRC} && $(PRECPP) < main.js     | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}main.js;     ${CD_ROOT}
+query.js:
+	${CD_SRC} && $(PRECPP) < query.js    | $(CPP) $(CPPFLAGS) > ${BUILD_DIR}query.js;    ${CD_ROOT}
 
 # build debug
 debug: debug_dir $(DEBUG_SRC)
@@ -87,11 +89,13 @@ rule.debug.js:
 lp.debug.js:
 	${CD_SRC} && $(PRECPP) < lp.js       | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}lp.js;       ${CD_ROOT}
 bdds.debug.js:
-	${CD_SRC} && $(PRECPP) < bdd.js     | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}bdd.js;     ${CD_ROOT}
+	${CD_SRC} && $(PRECPP) < bdd.js      | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}bdd.js;      ${CD_ROOT}
 messages.debug.js:
 	${CD_SRC} && $(PRECPP) < messages.js | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}messages.js; ${CD_ROOT}
 main.debug.js:
 	${CD_SRC} && $(PRECPP) < main.js     | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}main.js;     ${CD_ROOT}
+query.debug.js:
+	${CD_SRC} && $(PRECPP) < query.js    | $(CPP) $(CPPDEBUGFLAGS) > ${DEBUG_DIR}query.js;    ${CD_ROOT}
 
 test: build
 	${NODE_BIN}mocha test

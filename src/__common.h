@@ -15,7 +15,7 @@
 //#define TRACE
 //#define DEBUG
 
-#define MEMO
+//#define MEMO
 
 #ifdef DEBUG
 #  include "__debug.js"
