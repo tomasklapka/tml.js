@@ -106,7 +106,7 @@ class bdd {
 	from_range(max, bits, offset, ex, r) {
 		ID_TRC('from_range')
 		let x = this.F;
-		for (let n = 0; n != max; ++n) {
+		for (let n = 0; n !== max; ++n) {
 			if (!ex.includes(n)) {
 				x = this.or(x, this.from_int(n, bits, offset));
 			}
@@ -115,20 +115,20 @@ class bdd {
 	}
 
 	pad(x, ar1, ar2, p, bits) {
-		for (let n = ar1; n != ar2; ++n) {
+		for (let n = ar1; n !== ar2; ++n) {
 			x = from_int_and(p, bits, n * bits, x);
 		}
 		return x;
 	}
 
 	rebit(x, prev, curr, nvars) {
-		if (prev == curr) return x;
+		if (prev === curr) return x;
 		if (prev > curr) throw new Error('assert prev < curr');
 		const v = Array(nvars);
 		let t = this.T;
-		for (let n = 0; n != nvars; ++n) {
+		for (let n = 0; n !== nvars; ++n) {
 			v[n] = (n % prev) + curr - prev + curr * (n / prev);
-			for (let k = 0; k != curr - prev; ++k) {
+			for (let k = 0; k !== curr - prev; ++k) {
 				t = this.and(t, from_bit((n / prev) * curr + k, false));
 			}
 		}
@@ -445,58 +445,80 @@ class bdd {
 		apply_ret(r, this.memo_and_deltail);
 	}
 
-	and_many(v, from = null, to = null) {
-		ID('and_many')
-		TRC(`and_many-${__id} (v.length:${v.length}, from: ${from}, to: ${to})`)
-		from = from || 0;
-		to = to || v.length;
-		if (1 === (to - from)) return v[from];
-		if (2 === (to - from)) return this.and(v[from], v[from+1]);
+	and_many_iter(v, from, to, res, m, f1, thi, tlo) {
+		ID('and_many_iter')
+		TRC(`and_many_iter-${__id} (v.length:${v.length}, from: ${from}, to: ${to} res: ${res.res}, m: ${m.m}, f1: ${f1.f1}, thi: ${t1.t1}, tlo: ${t2.t2})`)
+
+        if ((to - from) === 0) { res.res = this.T; return 1; }
+		if (1 === (to - from)) { res.res = v[from]; return 1; }
+		if (2 === (to - from)) { res.res = this.and(v[from], v[from+1]); return 1; }
 		while (leaf(v[from])) {
-			if (!trueleaf(v[from])) {
-				return this.F;
-			} else {
-				if (1 === (to - ++from)) {
-					return v[from];
-				}
-			}
+			if (!trueleaf(v[from])) { res.res = this.F; return 1; }
+			else { if (1 === (to - ++from)) { res.res = v[from]; return 1; }
+			else { if (2 === (to - from)) { this.and(v[from], v[from+1]); return 1; }}}
 		}
-		let t = v[from];
-		const sz = v.length;
-		let m = getnode(t).v;
+		while (leaf(v[to - 1])) {
+            if (!trueleaf(v[to - 1])) { res.res = this.F; return 1; }
+            else { if (1 === (--to - from)) { res.res = v[from]; return 1; }
+            else { if (2 === (to - from)) { this.and(v[from], v[from+1]); return 1; }}}
+        }
+        const t = v[from];
+		m.m = getnode(t).v;
+        f1.f1 = v.length;
 		let b = false;
 		let eq = true;
-		for (let i = from + 1; i != to; ++i) {
-			if (leaf(v[i])) {
-				if (!trueleaf(v[i])) return this.F;
-				continue;
-			}
-			const n = getnode(v[i]);
-			b |= n.v != m;
-			eq &= t === v[i];
-			if (n.v < m) m = n.v;
+		let flag = false;
+		for (let i = from + 1; i !== to; ++i) {
+			if (!leaf(v[i])) {
+                const n = getnode(v[i]);
+                b |= n.v !== m.m;
+                eq &= t === v[i];
+                if (n.v < m) m = n.v;
+			} else if (!trueleaf(v[i])) { res.res = this.F; return 1; }
 		}
-		if (eq) return t;
-		for (let i = from; i != to; ++i) {
-			if (!b || getnode(v[i]).v === m) {
-				v[v.length] = leaf(v[i]) ? v[i] : getnode(v[i]).hi;
-			} else {
-				v[v.length] = v[i];
-			}
+		if (eq) { res.res = t; return 1; }
+		for (let i = from; i !== to; ++i) {
+            if (!leaf(v[i])) {
+                const n = getnode(v[i]);
+                if (b && n.v !== m.m) v[v.length] = v[i];
+                else if (!leaf(n.hi)) v[v.length] = n.hi;
+                else if (!trueleaf(n.hi)) { flag = true; break; }
+            }
+        }
+		t1.t1 = v.length;
+		for (let i = from; i !== to; ++i) {
+            if (!leaf(v[i])) {
+                const n = getnode(v[i]);
+                if (b && n.v !== m.m) v[v.length] = v[i];
+                else if (!leaf(n.lo)) v[v.length] = n.lo;
+                else if (!trueleaf(n.lo)) {
+                    if (flag) { res.res = this.F; return 1; }
+                    return 2;
+                }
+            }
 		}
-		const t1 = v.length;
-		for (let i = from; i != to; ++i) {
-			if (!b || getnode(v[i]).v === m) {
-				v[v.length] = leaf(v[i]) ? v[i] : getnode(v[i]).lo;
-			} else {
-				v[v.length] = v[i];
-			}
-		}
-		const t2 = v.length;
-		const hi = this.and_many(v, sz, t1);
-		const lo = this.and_many(v, t1, t2);
-		return this.add(new node(m, hi, lo));
+        t2.t2 = v.length;
+		return flag ? 3 : 0;
 	}
+
+    and_many(v, from = null, to = null) {
+        ID('and_many')
+        TRC(`and_many-${__id} (v.length:${v.length}, from: ${from}, to: ${to})`)
+        const res = { res: 0 };
+        const f1  = { f1:  0 };
+        const t1  = { t1:  0 };
+        const t2  = { t2:  0 };
+        const m   = { m:   0 };
+        switch (this.and_many_iter(v, from, to, res, m, f1, t1, t2)) {
+            case 0: return this.add(new node(m,
+                this.and_many(v, f1.f1, t1.t1),
+                this.and_many(v, t1.t1, t2.t2)));
+            case 1: return res.res;
+            case 2: return this.add(new node(m, this.and_many(v, f1.f1, t1.t1), this.F));
+            case 3: return this.add(new node(m, this.F, this.and_many(v, t1.t1, t2.t2)));
+            default: throw new Error('Unexpected case');
+        }
+    }
 	// if-then-else operator
 	ite(v, t, e) {
 		ID('ite')
@@ -553,8 +575,8 @@ class bdd {
 		}
 		let n = s.length;
 		while (n--) {
-			for (let i = 0; i != ar; ++i) {
-				for (let b = 0; b != bits; ++b) {
+			for (let i = 0; i !== ar; ++i) {
+				for (let b = 0; b !== bits; ++b) {
 					if (s[n][i * bits + b]) {
 						r[n][i] |= 1 << (bits - b - 1);
 					}
@@ -569,8 +591,8 @@ class bdd {
 		const s = Array(bits * ar).fill(true);
 		if (!this.onesat(x, bits * ar, s)) return [];
 		const r = Array(ar).fill(0);
-		for (let i = 0; i != ar; ++i) {
-			for (let b = 0; b != bits; ++b) {
+		for (let i = 0; i !== ar; ++i) {
+			for (let b = 0; b !== bits; ++b) {
 				if (s[i * bits + b] > 0) {
 					r[i] |= 1 << (bits - b - 1);
 				}
@@ -586,8 +608,6 @@ class bdd {
 		this.memo_and_not = {};
 		this.memo_or = {};
 		this.memo_permute = {};
-		this.memo_and_ex = {};
-		this.memo_and_not_ex = {};
 		this.memo_deltail = {};
 		this.memo_and_deltail = {};
 		this.memo_ex = {};
