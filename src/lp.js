@@ -47,23 +47,23 @@ class lp {
 		if (prev) this.ar = prev.ar;
 		else this.ar = 0;
 		for (let m of r) {
-			for (let j = 0; j != m.length; ++j) { const t = m[j];
+			for (let j = 0; j !== m.length; ++j) { const t = m[j];
 				this.ar = Math.max(this.ar, t.length -1);
-				for (let k = 0; k != t.length; ++k) { const e = t[k];
+				for (let k = 0; k !== t.length; ++k) { const e = t[k];
 					if (e > 0) this.dsz = Math.max(this.dsz, e);
 				}
 			}
 		}
 		this.dsz = Math.max(prev ? prev.dsz : this.dsz+1, this.dsz+1);
-		for (let i = 0; i != g.length; ++i) { const t = g[i];
+		for (let i = 0; i !== g.length; ++i) { const t = g[i];
 			if (t.length-1 > this.ar) throw new Error(err_goal_arity);
-			else for (let j = 0; j != t.length; ++j) { const e = t[j];
+			else for (let j = 0; j !== t.length; ++j) { const e = t[j];
 				if (e > 0 && e >= this.dsz) throw new Error(err_goal_sym);
 			}
 		}
-		for (let i = 0; i != this.pgoals.length; ++i) { const t = this.pgoals[i];
+		for (let i = 0; i !== this.pgoals.length; ++i) { const t = this.pgoals[i];
 			if (t.length-1 > this.ar) throw new Error(err_goal_arity);
-			else for (let j = 0; j != t.length; ++j) { const e = t[j];
+			else for (let j = 0; j !== t.length; ++j) { const e = t[j];
 				if (e > 0 && e >= this.dsz) throw new Error(err_goal_sym);
 			}
 		}
@@ -97,14 +97,14 @@ class lp {
 			DBG(__proof('p2', this.proof2.bdd.V.length));
 			//DBG(process.exit(0));
 		}
-		for (let i = 0; i != g.length; ++i) {
+		for (let i = 0; i !== g.length; ++i) {
 			this.gbdd = bdd.or(this.gbdd, fact(g[i], this.bits));
 		}
 	}
 
 	get_proof1() {
 		const p = new Set();
-		for (let i = 0; i != this.rules.length; ++i) {
+		for (let i = 0; i !== this.rules.length; ++i) {
 			p.add(this.rules[i].proof1);
 		}
 		DBG(__proof(`get proof1():`, p));
@@ -113,11 +113,11 @@ class lp {
 
 	get_proof2() {
 		const p = new Set();
-		for (let i = 0; i != this.rules.length; ++i) {
+		for (let i = 0; i !== this.rules.length; ++i) {
 			this.rules[i].proof2.forEach(p.add, p);
 			DBG(__proof(`      get proof2() r  adding:`, this.rules[i].proof2));
 		}
-		for (let i = 0; i != this.pgoals.length; ++i) {
+		for (let i = 0; i !== this.pgoals.length; ++i) {
 			const m = [ 1, this.context.openp ].concat(
 				this.pgoals[i].slice(1),
 				[ this.context.closep ]);
@@ -144,7 +144,7 @@ class lp {
 	rule_pad(t) {
 		ID_TRC('rule_pad');
 		const r = [];
-		for (let i = 0; i != t.length; ++i) {
+		for (let i = 0; i !== t.length; ++i) {
 			r[i] = this.term_pad(JSON.parse(JSON.stringify(t[i])), this.ar);
 		}
 		return r;
@@ -254,7 +254,7 @@ class lp {
 
 	get_varbdd(par) {
 		let t = bdd.F;
-		for (let i = 0; i != this.rules.length; ++i) {
+		for (let i = 0; i !== this.rules.length; ++i) {
 			t = bdd.or(this.rules[i].get_varbdd(this.bits, par), t);
 		}
 		return t;

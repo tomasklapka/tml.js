@@ -196,7 +196,7 @@ class raw_term {
 			this.e[this.e.length] = m;
 		};
 		let dep = 0;
-		for (let i = 0; i != this.e.length; ++i) {
+		for (let i = 0; i !== this.e.length; ++i) {
 			if (this.e[i].type === elem.OPENP) ++dep;
 			else if (this.e[i].type === elem.CLOSEP && !--dep)
 				throw new Error(err_paren);

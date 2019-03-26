@@ -53,7 +53,7 @@ class rule {
 		this.p = new Set();
 		this.proof1 = [];
 		this.proof2 = new Set();
-		this.varmap = this.get_varmap(v)
+		this.varmap = this.get_varmap(v);
 		this.ae = new bdd_and_eq(bits, v[0]);
 		this.ext = this.get_extents(v, bits, dsz);
 		this.neg = v[1][0] < 0;
@@ -64,8 +64,7 @@ class rule {
 			for (let j = 0; j !== bits*ar; ++j) perm[j] = j;
 			for (let j = 0; j !== ar; ++j) {
 				const t = v[i+1][j+1];
-				if (t >= 0) continue;
-				else for (let b = 0; b !== bits; ++b) {
+				if (t < 0) for (let b = 0; b !== bits; ++b) {
 					perm[b+j*bits] = b+this.varmap[t]*bits;
 				}
 			}
