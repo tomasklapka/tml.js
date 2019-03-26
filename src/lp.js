@@ -77,7 +77,7 @@ class lp {
 		for (let m of r) {
 			if (m.length === 1) {
 				DBG(__rule('rule_add fact'));
-				this.db = bdd.or(this.db, fact(m[0], this.bits, context));
+				this.db = bdd.or(this.db, fact(m[0], this.bits));
 				DBG(__rule('/rule_add fact added db:', this.db));
 			} else {
 				DBG(__rule('rule_add rule'));
