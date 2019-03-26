@@ -449,7 +449,7 @@ class bdd {
 		ID('and_many_iter')
 		TRC(`and_many_iter-${__id} (v.length:${v.length}, from: ${from}, to: ${to} res: ${res.res}, m: ${m.m}, f1: ${f1.f1}, thi: ${t1.t1}, tlo: ${t2.t2})`)
 
-        if ((to - from) === 0) { res.res = this.T; return 1; }
+		if ((to - from) === 0) { res.res = this.T; return 1; }
 		if (1 === (to - from)) { res.res = v[from]; return 1; }
 		if (2 === (to - from)) { res.res = this.and(v[from], v[from+1]); return 1; }
 		while (leaf(v[from])) {
@@ -458,67 +458,67 @@ class bdd {
 			else { if (2 === (to - from)) { this.and(v[from], v[from+1]); return 1; }}}
 		}
 		while (leaf(v[to - 1])) {
-            if (!trueleaf(v[to - 1])) { res.res = this.F; return 1; }
-            else { if (1 === (--to - from)) { res.res = v[from]; return 1; }
-            else { if (2 === (to - from)) { this.and(v[from], v[from+1]); return 1; }}}
-        }
-        const t = v[from];
+			if (!trueleaf(v[to - 1])) { res.res = this.F; return 1; }
+			else { if (1 === (--to - from)) { res.res = v[from]; return 1; }
+			else { if (2 === (to - from)) { this.and(v[from], v[from+1]); return 1; }}}
+		}
+		const t = v[from];
 		m.m = getnode(t).v;
-        f1.f1 = v.length;
+		f1.f1 = v.length;
 		let b = false;
 		let eq = true;
 		let flag = false;
 		for (let i = from + 1; i !== to; ++i) {
 			if (!leaf(v[i])) {
-                const n = getnode(v[i]);
-                b |= n.v !== m.m;
-                eq &= t === v[i];
-                if (n.v < m) m = n.v;
+				const n = getnode(v[i]);
+				b |= n.v !== m.m;
+				eq &= t === v[i];
+				if (n.v < m) m = n.v;
 			} else if (!trueleaf(v[i])) { res.res = this.F; return 1; }
 		}
 		if (eq) { res.res = t; return 1; }
 		for (let i = from; i !== to; ++i) {
-            if (!leaf(v[i])) {
-                const n = getnode(v[i]);
-                if (b && n.v !== m.m) v[v.length] = v[i];
-                else if (!leaf(n.hi)) v[v.length] = n.hi;
-                else if (!trueleaf(n.hi)) { flag = true; break; }
-            }
-        }
+			if (!leaf(v[i])) {
+				const n = getnode(v[i]);
+				if (b && n.v !== m.m) v[v.length] = v[i];
+				else if (!leaf(n.hi)) v[v.length] = n.hi;
+				else if (!trueleaf(n.hi)) { flag = true; break; }
+			}
+		}
 		t1.t1 = v.length;
 		for (let i = from; i !== to; ++i) {
-            if (!leaf(v[i])) {
-                const n = getnode(v[i]);
-                if (b && n.v !== m.m) v[v.length] = v[i];
-                else if (!leaf(n.lo)) v[v.length] = n.lo;
-                else if (!trueleaf(n.lo)) {
-                    if (flag) { res.res = this.F; return 1; }
-                    return 2;
-                }
-            }
+			if (!leaf(v[i])) {
+				const n = getnode(v[i]);
+				if (b && n.v !== m.m) v[v.length] = v[i];
+				else if (!leaf(n.lo)) v[v.length] = n.lo;
+				else if (!trueleaf(n.lo)) {
+					if (flag) { res.res = this.F; return 1; }
+					return 2;
+				}
+			}
 		}
-        t2.t2 = v.length;
+		t2.t2 = v.length;
 		return flag ? 3 : 0;
 	}
 
-    and_many(v, from = null, to = null) {
-        ID('and_many')
-        TRC(`and_many-${__id} (v.length:${v.length}, from: ${from}, to: ${to})`)
-        const res = { res: 0 };
-        const f1  = { f1:  0 };
-        const t1  = { t1:  0 };
-        const t2  = { t2:  0 };
-        const m   = { m:   0 };
-        switch (this.and_many_iter(v, from, to, res, m, f1, t1, t2)) {
-            case 0: return this.add(new node(m,
-                this.and_many(v, f1.f1, t1.t1),
-                this.and_many(v, t1.t1, t2.t2)));
-            case 1: return res.res;
-            case 2: return this.add(new node(m, this.and_many(v, f1.f1, t1.t1), this.F));
-            case 3: return this.add(new node(m, this.F, this.and_many(v, t1.t1, t2.t2)));
-            default: throw new Error('Unexpected case');
-        }
-    }
+	and_many(v, from = null, to = null) {
+		ID('and_many')
+		TRC(`and_many-${__id} (v.length:${v.length}, from: ${from}, to: ${to})`)
+		const res = { res: 0 };
+		const f1  = { f1:  0 };
+		const t1  = { t1:  0 };
+		const t2  = { t2:  0 };
+		const m   = { m:   0 };
+		switch (this.and_many_iter(v, from, to, res, m, f1, t1, t2)) {
+			case 0: return this.add(new node(m,
+				this.and_many(v, f1.f1, t1.t1),
+				this.and_many(v, t1.t1, t2.t2)));
+			case 1: return res.res;
+			case 2: return this.add(new node(m, this.and_many(v, f1.f1, t1.t1), this.F));
+			case 3: return this.add(new node(m, this.F, this.and_many(v, t1.t1, t2.t2)));
+			default: throw new Error('Unexpected case');
+		}
+	}
 	// if-then-else operator
 	ite(v, t, e) {
 		ID('ite')
