@@ -40,7 +40,7 @@ class driver {
 				rp = new raw_progs(rp);
 			} catch (err) { console.log('Parse error:', err); return; }
 		}
-		for (let n = 0; n != rp.p.length; ++n) {
+		for (let n = 0; n !== rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
 			this.openp = this.d.get_by_str("(");
 			this.closep = this.d.get_by_str(")");
@@ -78,7 +78,7 @@ class driver {
 	get_nums(p) {
 		ID_TRC('get_nums');
 		let nums = 0;
-		for (let i = 0; i != p.d.length; ++i) {
+		for (let i = 0; i !== p.d.length; ++i) {
 			const d = p.d[i];
 			const add = !d.fname
 				? (d.arg.length-1)
@@ -86,9 +86,9 @@ class driver {
 			DBG(__driver(`add:`, add, 'nums:', nums, '256+add:', 256+add, 'd', d));
 			nums = Math.max(nums, 256 + add);
 		}
-		for (let i = 0; i != p.r.length; ++i) { const r = p.r[i];
-			for (let j = 0; j != r.b.length; ++j) { const t = r.b[j];
-				for (let k = 0; k != t.e.length; ++k) { const e = t.e[k];
+		for (let i = 0; i !== p.r.length; ++i) { const r = p.r[i];
+			for (let j = 0; j !== r.b.length; ++j) { const t = r.b[j];
+				for (let k = 0; k !== t.e.length; ++k) { const e = t.e[k];
 					if (e.type === elem.NUM) nums = Math.max(nums, e.num + 256);
 				}
 			}
@@ -100,7 +100,7 @@ class driver {
 	directives_load(p) {
 		ID_TRC('directives_load');
 		const r = {};
-		for (let k = 0; k != p.d.length; ++k) {
+		for (let k = 0; k !== p.d.length; ++k) {
 			const d = p.d[k];
 			const str = d.arg.slice(1, d.arg.length-1);
 			r[this.d.get_by_lex(d.rel)] = d.fname
@@ -115,7 +115,7 @@ class driver {
 		DBG(__driver(`get_term(r)`, r));
 		const t = [];
 		t[t.length] = r.neg ? -1 : 1;
-		for (let i = 0; i != r.e.length; ++i) {
+		for (let i = 0; i !== r.e.length; ++i) {
 			const e = r.e[i];
 			if (e.type === elem.NUM) t[t.length] = e.num + 256;
 			else if (e.type === elem.CHR) t[t.length] = e.e[0].charCodeAt()+1;
@@ -129,7 +129,7 @@ class driver {
 	get_rule(r) {
 		ID_TRC('get_rule');
 		const m = [];
-		for (let i = 0; i != r.b.length; ++i) {
+		for (let i = 0; i !== r.b.length; ++i) {
 			m[m.length] = this.get_term(r.b[i])
 		}
 		if (m[0][0] > 0) {
@@ -141,7 +141,7 @@ class driver {
 	}
 
 	grammar_to_rules(g, m, rel) {
-		for (let i = 0; i != g.length; ++i) { const p = g[i]; // production
+		for (let i = 0; i !== g.length; ++i) { const p = g[i]; // production
 			if (p.p.length < 2) throw new Error("empty production.\n");
 			const t = [];
 			let v = -1;
@@ -181,7 +181,7 @@ class driver {
 			rtxt.forEach(m.add, m);
 		}
 		DBG(__dict(this.d));
-		for (let i = 0; i != p.r.length; ++i) { const x = p.r[i];
+		for (let i = 0; i !== p.r.length; ++i) { const x = p.r[i];
 			if (x.goal && !x.pgoal) {
 				if (x.b.length !== 1) throw new Error ('assert x.b.length === 1');
 				g[g.length] = this.get_term(x.b[0]);
@@ -195,9 +195,9 @@ class driver {
 			}
 		}
 		const keys = Object.keys(s);
-		for (let i = 0; i != keys.length; ++i) {
+		for (let i = 0; i !== keys.length; ++i) {
 			const x = s[keys[i]];
-			for (let n = 0; n != x.length-1; ++n) {
+			for (let n = 0; n !== x.length-1; ++n) {
 				m.add([[ 1, +keys[i], x[n].charCodeAt()+1, n + 257, n + 258 ]]);
 			}
 			m.add([[
@@ -213,7 +213,7 @@ class driver {
 		this.prog = new lp(m, g, pg, this.prog, context);
 		this.prog.nul = this.nul;
 		if (!s.length) {
-			for (let i = 0; i != this.builtin_rels.length; ++i) {
+			for (let i = 0; i !== this.builtin_rels.length; ++i) {
 				this.builtin_symbdds[this.builtin_symbdds.length] =
 					this.prog.get_sym_bdd(this.builtin_rels[i], 0);
 			}
@@ -228,7 +228,7 @@ class driver {
 		if (!this.prog.pfp()) return false;
 
 		let db = this.prog.db;
-		for (let i = 0; i != this.builtin_symbdds.length; ++i) {
+		for (let i = 0; i !== this.builtin_symbdds.length; ++i) {
 			db = bdd.and_not(db, this.builtin_symbdds[i]);
 		}
 		console.log(this.printbdd_matrix('', this.prog.getbdd(db)));
@@ -236,7 +236,7 @@ class driver {
 	}
 
 	printbdd_matrices(os = '', t) {
-		for (let i = 0; i != t.length; ++i) {
+		for (let i = 0; i !== t.length; ++i) {
 			os = this.printbdd(os, t[i])
 		}
 		return os;

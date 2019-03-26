@@ -445,7 +445,7 @@ class bdd {
 		apply_ret(r, this.memo_and_deltail);
 	}
 
-	and_many_iter(v, from, to, res, m, f1, thi, tlo) {
+	and_many_iter(v, from, to, res, m, f1, t1, t2) {
 		ID('and_many_iter')
 		TRC(`and_many_iter-${__id} (v.length:${v.length}, from: ${from}, to: ${to} res: ${res.res}, m: ${m.m}, f1: ${f1.f1}, thi: ${t1.t1}, tlo: ${t2.t2})`)
 

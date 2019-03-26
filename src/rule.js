@@ -59,13 +59,13 @@ class rule {
 		this.neg = v[1][0] < 0;
 		const ar = v[0].length - 1;
 		v[0].shift();
-		for (let i = 0; i !== v.length; ++i) {
+		for (let i = 0; i !== v.length - 1; ++i) {
 			const perm = Array(bits * ar);
 			for (let j = 0; j !== bits*ar; ++j) perm[j] = j;
 			for (let j = 0; j !== ar; ++j) {
 				const t = v[i+1][j+1];
 				if (t < 0) for (let b = 0; b !== bits; ++b) {
-					perm[b+j*bits] = b+this.varmap[t]*bits;
+					perm[b+j*bits] = b+this.varmap.get(t)*bits;
 				}
 			}
 			this.q[this.q.length] = new query(bits, v[i+1], perm);
@@ -160,15 +160,16 @@ class rule {
 
 	fwd(db, bits, ar) {
 		DBG(__pfp(`rule.fwd(db: ${db}, bits: ${bits}, ar: ${ar})`));
-		let vars = bdd.T;
 		const v = Array(this.q.length);
 		let i = 0;
-		for (let j = 0; j !== this.q.length; ++j) {
-			const t = this.q[j].set(db);
+		for (let j = 0; j !== this.q.length; ++j) { const x = this.q[j];
+			const t = x.set(db);
 			v[i++] = t;
 			if (bdd.F === t) return bdd.F;
 		}
-		vars = this.ae.set(bdd.deltail(vars, bits*ar))
+		let vars = bdd.and_many(v, 0, v.length);
+		if (vars === bdd.F) return bdd.F;
+		vars = this.ae.set(bdd.deltail(vars, bits*ar));
 		vars = this.ae.set(vars);
 		if (this.proof2.length !== 0) this.p.add(vars);
 		return vars;

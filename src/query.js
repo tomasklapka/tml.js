@@ -18,10 +18,10 @@
 
 //## define getnode(x) bdd.V[(x)]
 
-const { bdd } = require('./bdd');
+const { node, bdd } = require('./bdd');
 
 function from_term(t) {
-    const r = Array(t.length-1);
+    const r = Array(t.length-1).fill(0);
     const m = new Map();
     for (let n = 1; n !== t.length; ++n) {
         if (t[n] >= 0) r[n-1] = t[n]+1;
@@ -41,9 +41,11 @@ function flip(n) {
 
 class query {
     constructor(bits, t, perm) {
+        ID_TRC('new query')
+        DBG(__query(`query(bits: ${bits}, t: ${t}, perm: ${perm})`))
         this.neg = t[0] < 0;
         this.bits = bits;
-        this.nvars = t.length - 1;
+        this.nvars = (t.length - 1) * bits;
         this.e = from_term(t);
         this.perm = perm;
         this.domain = this.getdom();
@@ -54,19 +56,26 @@ class query {
         if (this.memo.has(x)) return this.memo.get(x);
         const r = this.compute(x, 0);
         this.memo.set(x, r);
-        return this.memo.get(x);
+        return r;
     }
-    compute (x, v) {
+    compute(x, v) {
+        ID_TRC('query.compute')
+        DBG(__query(`query.compute-${__id}(x: ${x}, v: ${v})`))
         if (leaf(x) && (!trueleaf(x) || v === this.nvars)) return x;
         const n = this.neg ? flip(getnode(x)) : getnode(x).clone();
         if (leaf(x) || v+1 < n.v) { n.v = v+1; n.hi = x; n.lo = x; }
-        if (!has(this.domain, v/this.bits+1))
+        const vbits = Math.floor(v/this.bits);
+        if (!this.domain.includes(vbits+1))
             return bdd.ite(this.perm[v], this.compute(n.hi, v+1), this.compute(n.lo, v+1));
-        const evbits = this.e[v/this.bits];
-        if (evbits > 0)
-            return this.compute(n[(evbits-1)&(1<<(this.bits-v%this.bits-1))?1:2], v+1);
-        if (evbits < 0)
-            return this.compute(n[this.path[(-evbits-1)*this.bits+v%this.bits]===1?1:2], v+1);
+        const evbits = this.e[vbits];
+        if (evbits > 0) {
+            const t = (evbits-1)&(1<<(this.bits-(v%this.bits)-1)) ? n.hi : n.lo;
+            return this.compute(t, v+1);
+        }
+        if (evbits < 0) {
+            const t = this.path[(-evbits-1)*this.bits+(v%this.bits)]===1 ? n.hi : n.lo
+            return this.compute(t, v+1);
+        }
         this.path[v] = 1;
         x = this.compute(n.hi, v+1);
         this.path[v] = -1;
@@ -97,7 +106,7 @@ class bdd_and_eq {
         if (this.memo.has(x)) return this.memo.get(x);
         const r = this.compute(x, 0);
         this.memo.set(x, r);
-        return this.memo.get(x);
+        return r;
     }
     getdom() {
         const r = [];
@@ -113,17 +122,17 @@ class bdd_and_eq {
         if (leaf(x) && (!trueleaf(x) || v === this.nvars)) return x;
         const n = getnode(x).clone();
         if (leaf(x) || v+1 < n.v) { n.v = v+1; n.hi = x; n.lo = x; }
-        if (!has(this.domain, v/this.bits+1)) {
+        if (!this.domain.includes(Math.floor(v/this.bits)+1)) {
             ++v;
             return bdd.add(new node(v, this.compute(n.hi, v), this.compute(n.lo, v)));
         }
-        const evbits = this.e[v/this.bits];
+        const evbits = this.e[Math.floor(v/this.bits)];
         if (evbits > 0)
-            return (evbits-1) & (1 << (this.bits - v % this.bits - 1))
+            return (evbits-1) & (1 << (this.bits - (v % this.bits) - 1))
                 ? bdd.add(new node(v+1, this.compute(n.hi, v+1), bdd.F))
                 : bdd.add(new node(v+1, bdd.F, this.compute(n.lo, v+1)));
         if (evbits < 0)
-            return this.path[(-evbits-1) * this.bits+v%this.bits] === 1
+            return this.path[(-evbits-1) * this.bits+(v%this.bits)] === 1
                 ? bdd.add(new node(v+1, this.compute(n.hi, v+1), bdd.F))
                 : bdd.add(new node(v+1, bdd.F, this.compute(n.lo, v+1)));
         this.path[v] = 1;
@@ -153,11 +162,11 @@ class extents {
         if (this.memo.has(x)) return this.memo.get(x);
         const r = this.compute(x, 0);
         this.memo.set(x, r);
-        return this.memo.get(x);
+        return r;
     }
     get_int(v) {
         let r = 0;
-        const pos = (v-1) / this.bits;
+        const pos = Math.floor((v-1) / this.bits);
         for (let n = pos * this.bits; n !== (pos+1)*this.bits; ++n) {
             if (this.path[n] === 1) r |= 1 << (this.bits-1-n%this.bits);
         }
@@ -168,7 +177,7 @@ class extents {
         const n = getnode(x).clone();
         if (leaf(x) || v+1 < n.v) { n.v = v+1; n.hi = x; n.lo = x; }
         DBG()//if (v > this.nvars)) throw new Error("assert(v <= nvars)");
-        if (!has(this.domain, v/this.bits+1)) {
+        if (!this.domain.includes(Math.floor(v/this.bits) + 1)) {
             ++v;
             return n.hi === n.lo
                 ? this.compute(n.hi, v)
@@ -177,10 +186,10 @@ class extents {
         do {
             if (v < this.bits || (v % this.bits)) continue;
             const i = this.get_int(v);
-            const t = v/this.bits-1;
+            const t = Math.floor(v/this.bits) - 1;
             if ((this.glt > 0 && i >= this.glt)
             || (this.ggt > 0 && i <= this.ggt)
-            || has(this.excl, i)
+            || (this.excl.includes(i))
             || (this.gt[t] < 0 && i <= this.get_int(this.bits*-this.gt[t]))
             || (this.gt[t] > 0 && i <= this.gt[t])
             || (this.lt[t] < 0 && i >= this.get_int(this.bits*-this.lt[t]))

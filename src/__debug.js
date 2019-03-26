@@ -18,6 +18,7 @@ const __pfp         = __d('tml:pfp');
 const __varbdd      = __d('tml:pfp:varbdd');
 const __rule        = __d('tml:pfp:rule');
 const __proof       = __d('tml:pfp:proof');
+const __query       = __d('tml:pfp:query');
 const __counters    = {};
 const __counter     = name => {
 	if (!__counters.hasOwnProperty(name)) __counters[name] = 0;
