@@ -139,10 +139,10 @@ class rule {
 		const ar = v[0].length - 1;
 		let l = 0;
 		const excl = [ this.context.pad, this.context.openp, this.context.closep ];
-		const lt = [ ar, 0 ];
-		const gt = [ ar, 0 ];
-		const succ = [ ar, 0 ];
-		const pred = [ ar, 0 ];
+		const lt = Array(ar).fill(0);
+		const gt = Array(ar).fill(0);
+		const succ = Array(ar).fill(0);
+		const pred = Array(ar).fill(0);
 		const dom = [];
 		for (let value of this.varmap.values()) {
 			dom[dom.length] = value;
