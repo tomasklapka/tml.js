@@ -14,12 +14,12 @@
     "test": "node_modules/.bin/mocha test"
   },
   "dependencies": {
-    "debug": "^4.1.1"
+    "browserify": "latest",
+    "debug": "latest",
+    "exorcist": "latest",
+    "terser": "latest"
   },
   "devDependencies": {
-    "browserify": "latest",
-    "exorcist": "latest",
-    "mocha": "latest",
-    "terser": "latest"
+    "mocha": "latest"
   }
 }
