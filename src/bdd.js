@@ -57,6 +57,9 @@ class bdd {
 	constructor() {
 		ID('bdd')
 		DBG(this.__id = __id)
+		this.reset();
+	}
+	reset() {
 		this.T = bdd.T;
 		this.F = bdd.F;
 		this.V = [];          // all nodes

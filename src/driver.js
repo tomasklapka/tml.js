@@ -36,9 +36,7 @@ class driver {
 		this.prog = null;
 		this.mult = false;
 		if (!(rp instanceof raw_progs)) {
-			try {
-				rp = new raw_progs(rp);
-			} catch (err) { console.log('Parse error:', err); return; }
+			rp = new raw_progs(rp);
 		}
 		for (let n = 0; n !== rp.p.length; ++n) {
 			this.d.nums = Math.max(this.d.nums, this.get_nums(rp.p[n]))
@@ -254,7 +252,6 @@ class driver {
 				else ss += '[' + k + '] ';
 			}
 			s[s.length] = ss;
-
 		}
 		DBG(__bdd(`printbdd - ${s}`, s));
 		os += s.sort().join(`\n`);
@@ -275,7 +272,7 @@ class driver {
 		return this.printbdd(os, bdd.from_bits(t, bits, ar));
 	}
 
-	printdb(os, p = null) {
+	printdb(os = '', p = null) {
 		ID_TRC('printdb');
 		p = p || this.prog;
 		return this.printbdd(os, p, p.db);
@@ -286,4 +283,4 @@ class driver {
 }
 
 
-module.exports = { driver, lp };
+module.exports = { driver, lp, bdd };

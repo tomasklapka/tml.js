@@ -321,15 +321,16 @@ function string_read_text(data) {
 	}
 	return s;
 }
+module.exports = {
+	isspace, isalnum, isalpha, isdigit,
+	elem, raw_progs, string_read_text
+};
+
+//## ifndef BROWSER
 // read prog from file
-function file_read_text(fname) {
+module.exports.file_read_text = function (fname) {
 	ID_TRC('file_read_text');
 	const { readFileSync } = require('fs');
 	return string_read_text(readFileSync(fname).toString());
 }
-
-module.exports = {
-	isspace, isalnum, isalpha, isdigit,
-	elem, raw_progs,
-	string_read_text, file_read_text
-};
+//## endif
